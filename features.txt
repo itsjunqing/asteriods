@@ -1,0 +1,8 @@
+
+1. rotate spaceship
+2. move spaceship according to the direction it points, aka the angle 
+3. spaceship's ability to launch bullets using spacebar
+4. rocks being spawned at every interval
+5. if bullets shoot the rocks, rocks spread into small pieces
+6. when small rocks being shot, it disappears
+7. add each shooting of rocks increase user points
