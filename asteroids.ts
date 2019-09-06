@@ -18,17 +18,12 @@ function asteroids() {
   // to animate the spaceship you will update the transform property
   let x = svg.clientWidth / 2;
   let y = svg.clientHeight / 2;
-  let angle = 170;
+  let angle = 90;
 
   let g = new Elem(svg,'g')
     // translate is to move element to x = 300 and y = 300
     // rotate 170 degrees clockwise
     .attr("transform","translate("+x+" "+y+") rotate("+angle+")")  
-
-  // let g = new Elem(svg,'g')
-  //   // translate is to move element to x = 300 and y = 300
-  //   // rotate 170 degrees clockwise
-  //   .attr("transform","translate(300 300) rotate(170)")    
 
   // create a polygon shape for the space ship as a child of the transform group
   let rect = new Elem(svg, 'polygon', g.elem) 
@@ -38,28 +33,36 @@ function asteroids() {
   const transformMatrix = 
     (e:Elem) => new WebKitCSSMatrix(window.getComputedStyle(e.elem).webkitTransform)
 
-  const radToDeg = (rad:number) => rad * 180 / Math.PI + 90;
-  
-  
+  const radToDeg = (rad:number) => rad * 180 / Math.PI;
+  const degToRad = (deg: number) => deg * Math.PI / 180;
 
 
+  console.log(g.elem.getBoundingClientRect());
+  console.log(rect.elem.getBoundingClientRect());
+  console.log(rect.elem.clientHeight);
+  console.log(rect.elem.clientWidth);
+  
+  let kk = g.elem.getBoundingClientRect();
+
+  console.log(kk.top);
+  console.log(kk.left);
 
   // FOR SHIP MOVING
-  const SHIP_BORDERS = 25;
+  const SHIP_BORDERS = 5;
   
   let speed = 5, multipler = 0;
 
   const stopArrowUp = Observable.fromEvent<KeyboardEvent>(document, "keyup")
-    .filter(({key}) => key == "ArrowUp")
+    .filter(({code}) => code == "ArrowUp")
     .subscribe(() => {
       multipler = 0;
       speed = 5;
     })
 
+  
   const accelerateShip = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({key}) => key == "ArrowUp")
-    .map(() => {
-      
+    .filter(({code}) => code == "ArrowUp")
+    .map(() => {   
       const xChange = speed * Math.sin(angle * Math.PI / 180),
             yChange = speed * Math.cos(angle * Math.PI / 180);
       x += xChange;
@@ -84,24 +87,115 @@ function asteroids() {
       return {x, y, multipler}
     })
     .subscribe(({x, y, multipler}) => {
-      g.attr("transform", "translate("+x+", "+y+") rotate("+angle+")");
+      g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")");
     })
   
+  
   const rotateShip = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({key}) => key == "ArrowRight" || key == "ArrowLeft")
-    .map(({key}) => {
-      if (key == "ArrowRight") {
+    .filter(({code}) => code == "ArrowRight" || code == "ArrowLeft")
+    .map(({code}) => {
+      if (code == "ArrowRight") {
         angle = (angle + 10) % 360
-      } else if (key == "ArrowLeft") {
+      } else if (code == "ArrowLeft") {
         angle = (angle - 10) % 360
       }
       return {angle}
     })
     .subscribe(({angle}) => {
-      g.attr("transform", "translate("+x+", "+y+") rotate("+angle+")");
+      g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")");
     })
 
 
+  const createBullet = Observable.fromEvent<KeyboardEvent>(document, "keydown")
+    .filter(({code}) => code == "Space")
+    .map(() => {
+      const bulletX = x + (20 * Math.sin(degToRad(angle))),
+            bulletY = y - (20 * Math.cos(degToRad(angle))),
+            bullet = new Elem(svg, "circle")
+                    .attr("cx", bulletX)
+                    .attr("cy", bulletY)
+                    .attr("r", 2)
+                    .attr("fill", "salmon");
+      return {bulletX, bulletY, bullet};
+    })
+    .map(({bulletX, bulletY, bullet}) => Observable.interval(10)
+                                          .takeUntil(Observable.interval(2000)
+                                            .map(() => {
+                                            let circles = svg.getElementsByTagName("circle");
+                                            // svg.removeChild(circles[0]);
+                                            circles[0].parentNode!.removeChild(circles[0]);
+                                          }))
+                                          .subscribe(() => {
+                                            const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+                                                  newY = bulletY - 5 * Math.cos(degToRad(angle))
+                                                  bulletX = newX;
+                                                  bulletY = newY;
+                                                  bullet.attr("cx", newX).attr("cy", newY);
+                                          }))
+    .subscribe(()=> {});
+
+    // .flatMap(({bulletX, bulletY, bullet}) => Observable.interval(10)
+    //                                                    .takeUntil(Observable.interval(2000)
+    //                                                    .(() => {
+    //                                                      const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+    //                                                           newY = bulletY - 5 * Math.cos(degToRad(angle))
+    //                                                           bulletX = newX;
+    //                                                           bulletY = newY;
+    //                                                           bullet.attr("cx", newX).attr("cy", newY);
+    //                                                    }))
+    //               )
+    // .subscribe()
+
+
+    // .subscribe(({bulletX, bulletY, bullet}) => {
+    //   setInterval(() => {
+    //     const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+    //           newY = bulletY - 5 * Math.cos(degToRad(angle))
+    //     bulletX = newX;
+    //     bulletY = newY;
+    //     bullet.attr("cx", newX).attr("cy", newY);
+    //   }, 10);
+    //   setTimeout(() => {
+    //     let circles = svg.getElementsByTagName("circle");
+    //     svg.removeChild(circles[0]);
+    //   }, 1000);
+    // })
+
+  const x1 = getRandomInt(100, 300),
+        y1 = getRandomInt(100, 300),
+        x2 = getRandomInt(100, 300),
+        y2 = getRandomInt(100, 300),
+        x3 = getRandomInt(100, 300),
+        y3 = getRandomInt(100, 300),
+        x4 = getRandomInt(100, 300),
+        y4 = getRandomInt(100, 300);
+
+  let newPoints = `${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`;
+  console.log(newPoints);
+
+  let rock = new Elem(svg, 'polygon') 
+    .attr("points", "10,10 80,10 80,80 10,80")
+    .attr("style","fill:black; stroke:cyan; stroke-width:1")
+    .attr("transform", "translate(100, 100) rotate(20)")
+  
+  // const values = getAttributeValues(rock, "transform");
+  // console.log(Number(values[0])+1);
+  // let moveRocks = Observable.interval(10)
+  //   .takeUntil(Observable.interval(2000))
+  //   .subscribe(() => {
+  //     const values = getAttributeValues(rock, "transform"),
+  //           rockX = Number(values[0]) + 1,
+  //           rockY = Number(values[1]) + 1;
+  //     rock.attr("transform", "translate("+rockX+" "+rockY+")");
+  //     })
+
+  const createRock = Observable.interval(10)
+    .map(() => {
+
+    })
+    
+
+    
   // let moveShip = Observable
   //   .fromEvent<KeyboardEvent>(document, "keydown")
   //   .map(({key}) => {
@@ -179,12 +273,6 @@ function asteroids() {
   //     g.attr("transform", "translate("+x+", "+y+") rotate("+angle+")");
   //   })
 
-  // Observable.fromEvent<KeyboardEvent>(document, "keyup")
-  //   .map(({key}) => {
-  //     if (key == "ArrowUp") {
-  //       i = 0
-  //     }
-  //   })
 
 
 }
@@ -192,6 +280,10 @@ function asteroids() {
 
 function getAttributeValues(e: Elem, attribute: string) : RegExpMatchArray {
   return e.attr(attribute).match(/\d+/g)!;
+}
+
+function getRandomInt(min: number, max: number) : number {
+  return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 
