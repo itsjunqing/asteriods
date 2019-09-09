@@ -28,7 +28,15 @@ function asteroids() {
   // Document your code!  
   // Explain which ideas you have used ideas from the lectures to 
   // create reusable, generic functions.
+
   const svg = document.getElementById("canvas")!;
+
+  // let enemy = new Elem(svg, "ellipse")
+  //   .attr("cx", 300).attr("cy", 20)
+  //   .attr("rx", 50).attr("ry", 20)
+  //   .attr("fill", "navy")
+
+  
   
   // make a group for the spaceship and a transform to move it and rotate it
   // to animate the spaceship you will update the transform property
@@ -44,31 +52,21 @@ function asteroids() {
     .attr("points","-15,20 15,20 0,-20")
     .attr("style","fill:black; stroke:white; stroke-width:1")
 
-
-  const rotateLeft = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({code}) => code == "ArrowLeft")
-    .map(() => ({
+  const ship = Observable.fromEvent<KeyboardEvent>(document, "keydown")
+    .map(key => ({
       x: transformMatrix(g).m41,
       y: transformMatrix(g).m42,
-      angle: (getRotationDegrees($('#canvas #ship')) - 10) % 360
+      angle: getRotationDegrees($('#canvas #ship')),
+      key: key
     }))
-  
-  const rotateRight = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({code}) => code == "ArrowRight")
-    .map(() => ({
-      x: transformMatrix(g).m41,
-      y: transformMatrix(g).m42,
-      angle: (getRotationDegrees($('#canvas #ship')) + 10) % 360
-    }))
-    
 
-  rotateLeft.subscribe(({x, y, angle}) => {
-    g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")");
-  })
+  const rotateLeft = ship.filter(({key}) => key.code == "ArrowLeft")
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")})
 
-  rotateRight.subscribe(({x, y, angle}) => {
-    g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")");
-  })
+  const rotateRight = ship.filter(({key}) => key.code == "ArrowRight")
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
+
+
   
   
   let speed = 5, multipler = 0;
@@ -81,29 +79,19 @@ function asteroids() {
       speed = 5;
     })
 
-  
-  const accelerateShip = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({code}) => code == "ArrowUp")
-    .map(() => {   
-      const angle = getRotationDegrees($('#canvas #ship')),
-            xChange = speed * Math.sin(degToRad(angle)),
+  const accelerateShip = ship.filter(({key}) => key.code == "ArrowUp")
+    .map(({x, y, angle}) => {
+      const xChange = speed * Math.sin(degToRad(angle)),
             yChange = speed * Math.cos(degToRad(angle)),
-            newX = transformMatrix(g).m41 + xChange,
-            newY = transformMatrix(g).m42 - yChange,
-            x = newX < 0? svg.clientWidth : newX > svg.clientWidth? 0 : newX,
-            y = newY < 0? svg.clientHeight : newY > svg.clientHeight? 0 : newY;
-
+            newX = (x+xChange) < 0? svg.clientWidth : (x+xChange) > svg.clientWidth? 0 : x+xChange,
+            newY = (y-yChange) < 0? svg.clientHeight : (y-yChange) > svg.clientHeight? 0 : y-yChange;
       if (speed < 300) {
         speed += multipler;
         multipler += 0.1;
       }
-      return {x, y, angle}
+      return {newX, newY, angle}
     })
-    
-  
-  accelerateShip.subscribe(({x, y, angle}) => {
-    g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")");
-  })
+    .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")");})
 
   
 
@@ -112,61 +100,51 @@ function asteroids() {
       let bullets = svg.getElementsByTagName("circle");
       if (bullets.length > 0) {
         svg.removeChild(bullets[0]);
+        console.log("deletebullets is running");
       }
+      
     })
 
-
-  const createBullets = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .filter(({code}) => code == "Space")
-    .map(() => {
-      const x = transformMatrix(g).m41,
-            y = transformMatrix(g).m42,
-            angle = getRotationDegrees($('#canvas #ship')),
-            bulletX = x + (20 * Math.sin(degToRad(angle))),
+  const createBullets = ship.filter(({key}) => key.code == "Space")
+    .map(({x, y, angle}) => {
+      const bulletX = x + (20 * Math.sin(degToRad(angle))),
             bulletY = y - (20 * Math.cos(degToRad(angle))),
             bullet = new Elem(svg, "circle")
                     .attr("cx", bulletX)
                     .attr("cy", bulletY)
                     .attr("r", 2)
                     .attr("fill", "salmon");
-      return {bulletX, bulletY, bullet};
+      console.log("creating bullets");
+      return {bulletX, bulletY, bullet, angle};
     })
   
+  const moveBullets = createBullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
+    .takeUntil(Observable.interval(800).map(_ => {console.log("800 take until");}))
+    .takeUntil(deleteBullets)
+    .map(() => {
+      const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+            newY = bulletY - 5 * Math.cos(degToRad(angle));
+            bulletX = newX;
+            bulletY = newY;
+            bullet.attr("cx", newX).attr("cy", newY);
+      return {bulletX, bulletY, bullet, angle}
+    }))
 
-  const moveBullets = createBullets.map(({bulletX, bulletY, bullet}) => Observable.interval(10)
-      .takeUntil(deleteBullets)
-      .subscribe(() => {
-        const angle = getRotationDegrees($('#canvas #ship')),
-              newX = bulletX + 5 * Math.sin(degToRad(angle)),
-              newY = bulletY - 5 * Math.cos(degToRad(angle))
-              bulletX = newX;
-              bulletY = newY;
-              bullet.attr("cx", newX).attr("cy", newY);
-      }))
-    .subscribe(()=> {});
+  // const moveBullets = createBullets.map(({bullet, angle}) => {
+  //   const bulletX = Number(bullet.attr("cx")) + (5 * Math.sin(degToRad(angle))),
+  //         bulletY = Number(bullet.attr("cy")) - (5 * Math.cos(degToRad(angle)))
+  //         bullet.attr("cx", bulletX).attr("cy", bulletY)
+  //   console.log("moving");
+  //   return {bulletX, bulletY, bullet}
+  // })
+
+  // Observable.interval(10).flatMap(_ => moveBullets).takeUntil(deleteBullets).subscribe(_ => {})
   
-  // // const rockPosition = getRandomRockPosition(),
-  // // size = 50,
-  // // // randomAngle = getRandomInt(0, 359),
-  // // xChange = size * Math.sin(degToRad(30)),
-  // // yChange = size * Math.cos(degToRad(30)),
-  // // newPoints = `${-xChange},${-yChange} ${xChange},${-yChange} ${size},${0} ${xChange},${yChange} ${-xChange},${yChange} ${-size},${0}`;
-  // // const test = new Elem(svg, "circle")
-  // //                   .attr("cx", 250)
-  // //                   .attr("cy", 300)
-  // //                   .attr("r", 30)
-  // //                   .attr("stroke", "salmon");
-  // // const rock = new Elem(svg, "polygon")
-  // //   .attr("points", newPoints)
-  // //   .attr("style","fill:black; stroke:cyan; stroke-width:1")
-  // //   .attr("transform", "translate(300 300) rotate(0)")
-
-  
-
   const createRocks = Observable.interval(500)  // generate every 0.5 seconds
-    .takeUntil(Observable.interval(3000))  // generate for 5 seconds
+    .takeUntil(Observable.interval(800))  // generate for 5 seconds
     .map(() => {
       const rockPosition = getRandomRockPosition(),
+            // size = getRandomInt(35, 50),
             size = 50,
             angle = getRandomInt(0, 359),
             xChange = size * Math.sin(degToRad(30)),
@@ -182,36 +160,133 @@ function asteroids() {
     })
 
 
-  const moveRocks = createRocks.map(({rockPosition, rock, angle}) => Observable.interval(100)
-    // .takeUntil(Observable.interval(10000))
-    .subscribe(() => {
-      const newX = rockPosition.x + 2 * Math.sin(degToRad(angle)),
-            newY = rockPosition.y - 2 * Math.cos(degToRad(angle)),
-            x = newX < -50? svg.clientWidth+50 : newX > (svg.clientWidth+50)? -50 : newX,
-            y = newY < -50? svg.clientHeight+50 : newY > (svg.clientHeight+50)? -50 : newY;
-      rockPosition.x = x;
-      rockPosition.y = y;
-      rock.attr("transform", "translate("+x+" "+y+") rotate("+angle+")")
-    }))
-  .subscribe(() => {});
+  // let k = createBullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
+  //   .takeUntil(deleteBullets)
+  //   .takeUntil(createRocks.filter(({rockPosition}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < 50)
+  //     .map(_ => {
+  //       new Elem(svg, "rect")
+  //         .attr("x", bulletX).attr("y", bulletY)
+  //         .attr("width", 2).attr("height", 2)
+  //         .attr("fill", "lime");
+  //       let bullets = svg.getElementsByTagName("circle");
+  //       if (bullets.length > 0) {
+  //         svg.removeChild(bullets[0]);
+  //         console.log("collide and removed");
+  //       }
+  //     }))
+  //   .map(_ => {
+  //     const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+  //           newY = bulletY - 5 * Math.cos(degToRad(angle));
+  //           bulletX = newX;
+  //           bulletY = newY;
+  //           bullet.attr("cx", newX).attr("cy", newY);
+  //     return {bulletX, bulletY, bullet, angle}
+  //   }))
+
+  // createRocks.flatMap(({rockPosition}) => Observable.interval(10)
+  //   .takeUntil(deleteBullets)
+  //   .takeUntil(moveBullets.filter(({bulletX, bulletY}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < 50)
+  //     .map(({bulletX, bulletY}) => {
+  //       new Elem(svg, "rect")
+  //         .attr("x", bulletX).attr("y", bulletY)
+  //         .attr("width", 2).attr("height", 2)
+  //         .attr("fill", "lime");
+  //       let bullets = svg.getElementsByTagName("circle");
+  //       if (bullets.length > 0) {
+  //         svg.removeChild(bullets[0]);
+  //         console.log("collide and removed");
+  //       }
+  //     })))
+  //   .subscribe(() => {})
+  // k.subscribe(() => {})
+  // createRocks.subscribe(() => {})
+    
+    // createBullets.flatMap(({bulletX, bulletY, bullet, angle}) => createRocks)
+
+  // const collision = moveBullets.flatMap(({bulletX, bulletY}) => createRocks
+  //     .filter(({rockPosition}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < 50)
+  //     .map(({rockPosition}) => ({rockPosition, bulletX, bulletY})))
+  //   .subscribe(({rockPosition, bulletX, bulletY}) => {
+  //     console.log("collision happens at " + rockPosition.x + "," + rockPosition.y + ` when bulletX = ${bulletX}, bulletY = ${bulletY}`);
+  //   })
+
+  // const collision = moveBullets.flatMap(({bulletX, bulletY}) => createRocks.map(({rockPosition}) => ({bulletX, bulletY, rockPosition})))
+  //   .subscribe(() => {})
+
+  const collision = createRocks.flatMap(({rockPosition}) => moveBullets
+      .filter(({bulletX, bulletY}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < 50)
+      .map(({bulletX, bulletY}) => {
+        new Elem(svg, "rect")
+          .attr("x", bulletX).attr("y", bulletY)
+          .attr("width", 2).attr("height", 2)
+          .attr("fill", "lime");
+        // let bullets = svg.getElementsByTagName("circle");
+        // if (bullets.length > 0) {
+        //   svg.removeChild(bullets[0]);
+        // }
+      }))
+    .subscribe(() => {})
+    
+
+
+  // createRocks.subscribe(() => {})
+
+  // moveBullets.subscribe(() => {});
+
+
+
+
+  
+  // const rockPosition = getRandomRockPosition(),
+  // size = 50,
+  // // randomAngle = getRandomInt(0, 359),
+  // xChange = size * Math.sin(degToRad(30)),
+  // yChange = size * Math.cos(degToRad(30)),
+  // newPoints = `${-xChange},${-yChange} ${xChange},${-yChange} ${size},${0} ${xChange},${yChange} ${-xChange},${yChange} ${-size},${0}`;
+  // const test = new Elem(svg, "circle")
+  //                   .attr("cx", 250)
+  //                   .attr("cy", 300)
+  //                   .attr("r", 30)
+  //                   .attr("stroke", "salmon");
+  // const rock = new Elem(svg, "polygon")
+  //   .attr("points", newPoints)
+  //   .attr("style","fill:black; stroke:cyan; stroke-width:1")
+  //   .attr("transform", "translate(300 300) rotate(0)")
+
+  
+
+  
+
+ 
+
+  // const moveRocks = createRocks.map(({rockPosition, rock, angle}) => Observable.interval(100)
+  //   // .takeUntil(Observable.interval(10000))
+  //   .subscribe(() => {
+  //     const newX = rockPosition.x + 2 * Math.sin(degToRad(angle)),
+  //           newY = rockPosition.y - 2 * Math.cos(degToRad(angle)),
+  //           x = newX < -50? svg.clientWidth+50 : newX > (svg.clientWidth+50)? -50 : newX,
+  //           y = newY < -50? svg.clientHeight+50 : newY > (svg.clientHeight+50)? -50 : newY;
+  //     rockPosition.x = x;
+  //     rockPosition.y = y;
+  //     rock.attr("transform", "translate("+x+" "+y+") rotate("+angle+")")
+  //   }))
+  // .subscribe(() => {});
 
 
 
 }
 
 function getRotationDegrees(obj: JQuery) {
-    var matrix = obj.css("-webkit-transform") ||
+    let matrix = obj.css("-webkit-transform") ||
     obj.css("-moz-transform")    ||
     obj.css("-ms-transform")     ||
     obj.css("-o-transform")      ||
     obj.css("transform");
-    if(matrix !== 'none') {
-        var values = matrix.split('(')[1].split(')')[0].split(',');
-        var a = Number(values[0]);
-        var b = Number(values[1]);
-        var angle = Math.round(Math.atan2(b, a) * (180/Math.PI));
-    } else { var angle = 0; }
-    return (angle < 0) ? angle + 360 : angle;
+    const values : string[] = matrix.split('(')[1].split(')')[0].split(','),
+            a : number= Number(values[0]),
+            b : number = Number(values[1]);
+    let angle : number = Math.round(Math.atan2(b, a) * (180/Math.PI));
+    return angle;
 }
 
 

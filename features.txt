@@ -6,3 +6,13 @@
 5. if bullets shoot the rocks, rocks spread into small pieces
 6. when small rocks being shot, it disappears
 7. add each shooting of rocks increase user points
+
+
+for every 100 milliseconds, it will move horizontally in back and forth until it reaches the end of svg width
+do that for 100000 seconds 
+at the same time launch bullet 
+
+for every 10 ms, move the bullet > check if bullet collide with rock > 
+																					if collide > destroy bullet > 
+																					otherwise > do nothing
+																					<repeat process until 1 second have reached OR it collides>
