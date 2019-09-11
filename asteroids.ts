@@ -65,7 +65,7 @@ function asteroids() {
   // Explain which ideas you have used ideas from the lectures to 
   // create reusable, generic functions.
 
-  let score = 0;
+  let score = 0, level = 1;
 
   const collisionDetection = (bullet: Elem, rocksArray: Array<[Elem, number]>) => {
     const bulletX = Number(bullet.attr("cx")),
@@ -82,15 +82,10 @@ function asteroids() {
       .map(rockInfo => {
         const rock = rockInfo[0],
               radius = Number(rock.attr("r"))
-
+        score += radius
         bullet.attr("collided", 1)
-        console.log("score before = " + score);
-        score += radius;
-        console.log("score after = " + score);
         svg.removeChild(rock.elem);
-        // rock.elem.parentNode!.removeChild(rock.elem);
         rocksArray.splice(rocksArray.indexOf(rockInfo), 1);
-
         document.getElementById("score")!.innerHTML = String(score)
         return rockInfo
       })
@@ -124,7 +119,7 @@ function asteroids() {
   
   
   let g = new Elem(svg,'g')
-    .attr("transform", "translate(300, 300) rotate(45)")
+    .attr("transform", "translate(300, 300) rotate(0)")
     .attr("id", "ship")
 
   let rect = new Elem(svg, 'polygon', g.elem) 
@@ -149,33 +144,52 @@ function asteroids() {
   
   let speed = 5, multipler = 0;
   
-  // function shipData = () => {
-  //   let spedd = 5; multipler = 0;
-  //   return {
-  //     lala: () => {
+  
+  const speedController = () => {
+    let speed = 5, multiplier = 0;
 
-  //     }
-  //   }
-  // }
+    return {
+      accelerate: () => {
+        speed = speed < 200? speed + multipler : speed
+        multipler += 0.1;
+      },
 
+      decelerate: () => {
+        Observable.interval(10)
+          .takeUntil(Observable.interval(5000))
+          .subscribe(() => {
+            speed -= multipler;
+            multipler -= 0.1;
+          })
+      },
+
+      getSpeed: () => speed,
+
+      reset: () => {
+        speed = 5
+        multipler = 0
+      }
+
+    }
+  }
+
+  let shipController = speedController();
 
   const stopArrowUp = Observable.fromEvent<KeyboardEvent>(document, "keyup")
     .filter(({code}) => code == "ArrowUp")
+    // .flatMap(() => Observable.interval())
     .subscribe(() => {
-      multipler = 0;
-      speed = 5;
+      shipController.reset();
     })
 
   ship.filter(({key}) => key.code == "ArrowUp")
     .map(({x, y, angle}) => {
-      const xChange = speed * Math.sin(degToRad(angle)),
-            yChange = speed * Math.cos(degToRad(angle)),
+      const xChange = shipController.getSpeed() * Math.sin(degToRad(angle)),
+            yChange = shipController.getSpeed() * Math.cos(degToRad(angle)),
             newX = (x+xChange) < 0? svg.clientWidth : (x+xChange) > svg.clientWidth? 0 : x+xChange,
             newY = (y-yChange) < 0? svg.clientHeight : (y-yChange) > svg.clientHeight? 0 : y-yChange;
-      if (speed < 300) {
-        speed += multipler;
-        multipler += 0.1;
-      }
+
+      shipController.accelerate();
       return {newX, newY, angle}
     })
     .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")")}, () => {})
@@ -198,22 +212,6 @@ function asteroids() {
     })
 
 
-
-  // const fireBullets = bullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
-  //     .takeUntil(Observable
-  //       .interval(1000)
-  //       .filter(() => Number(bullet.attr("collided")) == 0)
-  //       .map(() => svg.removeChild(bullet.elem)))
-  //     .map(() => {
-  //       const newX = bulletX + 5 * Math.sin(degToRad(angle)),
-  //             newY = bulletY - 5 * Math.cos(degToRad(angle));
-  //             bulletX = newX;
-  //             bulletY = newY;
-  //       bullet.attr("cx", newX).attr("cy", newY);
-  //       collisionDetection(bullet, rocksArray);
-  //       return {bulletX, bulletY, bullet, angle}
-  //     }))
-
   const fireBullets = bullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
       .takeUntil(Observable
         .interval(1000)
@@ -223,15 +221,6 @@ function asteroids() {
         return {bulletX, bulletY, bullet, angle}
       }))
 
-  
-  // let k = fireBullets.filter(({bullet}) => {
-  //    console.log(Number(bullet.attr("collided"))); 
-  //    return Number(bullet.attr("collided")) == 1
-  // })
-  // .subscribe(({bullet}) => {
-  //   console.log("running collided");
-  //   svg.removeChild(bullet.elem)
-  // })
   
   fireBullets.filter(({bullet}) => Number(bullet.attr("collided")) == 0).subscribe(({bulletX, bulletY, bullet, angle}) => {
     const newX = Number(bullet.attr("cx")) + 5 * Math.sin(degToRad(angle)),
@@ -274,7 +263,7 @@ function asteroids() {
       rock.attr("cx", x).attr("cy", y)
     })
 
-
+  // TO END GAME WHEN ROCKS COLLIDE WITH SHIP
   // t.filter(rockInfo => {
   //   const rockX = Number(rockInfo[0].attr("cx")),
   //         rockY = Number(rockInfo[0].attr("cy")),
@@ -283,6 +272,7 @@ function asteroids() {
   //         y = transformMatrix(g).m42
   //   return distanceBetweenPoints(x, y, rockX, rockY) < radius
   // })
+
 
     
   t.subscribe(() => {})

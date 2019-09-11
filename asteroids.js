@@ -34,7 +34,7 @@ function getAttributeValues(e, attribute) {
     return e.attr(attribute).match(/\d+/g);
 }
 function asteroids() {
-    let score = 0;
+    let score = 0, level = 1;
     const collisionDetection = (bullet, rocksArray) => {
         const bulletX = Number(bullet.attr("cx")), bulletY = Number(bullet.attr("cy"));
         rocksArray
@@ -44,10 +44,8 @@ function asteroids() {
         })
             .map(rockInfo => {
             const rock = rockInfo[0], radius = Number(rock.attr("r"));
-            bullet.attr("collided", 1);
-            console.log("score before = " + score);
             score += radius;
-            console.log("score after = " + score);
+            bullet.attr("collided", 1);
             svg.removeChild(rock.elem);
             rocksArray.splice(rocksArray.indexOf(rockInfo), 1);
             document.getElementById("score").innerHTML = String(score);
@@ -72,7 +70,7 @@ function asteroids() {
     };
     const svg = document.getElementById("canvas");
     let g = new Elem(svg, 'g')
-        .attr("transform", "translate(300, 300) rotate(45)")
+        .attr("transform", "translate(300, 300) rotate(0)")
         .attr("id", "ship");
     let rect = new Elem(svg, 'polygon', g.elem)
         .attr("points", "-15,20 15,20 0,-20")
@@ -90,19 +88,38 @@ function asteroids() {
     ship.filter(({ key }) => key.code == "ArrowRight")
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle + 10) % 360) + ")"); }, () => { });
     let speed = 5, multipler = 0;
+    const speedController = () => {
+        let speed = 5, multiplier = 0;
+        return {
+            accelerate: () => {
+                speed = speed < 200 ? speed + multipler : speed;
+                multipler += 0.1;
+            },
+            decelerate: () => {
+                Observable.interval(10)
+                    .takeUntil(Observable.interval(5000))
+                    .subscribe(() => {
+                    speed -= multipler;
+                    multipler -= 0.1;
+                });
+            },
+            getSpeed: () => speed,
+            reset: () => {
+                speed = 5;
+                multipler = 0;
+            }
+        };
+    };
+    let shipController = speedController();
     const stopArrowUp = Observable.fromEvent(document, "keyup")
         .filter(({ code }) => code == "ArrowUp")
         .subscribe(() => {
-        multipler = 0;
-        speed = 5;
+        shipController.reset();
     });
     ship.filter(({ key }) => key.code == "ArrowUp")
         .map(({ x, y, angle }) => {
-        const xChange = speed * Math.sin(degToRad(angle)), yChange = speed * Math.cos(degToRad(angle)), newX = (x + xChange) < 0 ? svg.clientWidth : (x + xChange) > svg.clientWidth ? 0 : x + xChange, newY = (y - yChange) < 0 ? svg.clientHeight : (y - yChange) > svg.clientHeight ? 0 : y - yChange;
-        if (speed < 300) {
-            speed += multipler;
-            multipler += 0.1;
-        }
+        const xChange = shipController.getSpeed() * Math.sin(degToRad(angle)), yChange = shipController.getSpeed() * Math.cos(degToRad(angle)), newX = (x + xChange) < 0 ? svg.clientWidth : (x + xChange) > svg.clientWidth ? 0 : x + xChange, newY = (y - yChange) < 0 ? svg.clientHeight : (y - yChange) > svg.clientHeight ? 0 : y - yChange;
+        shipController.accelerate();
         return { newX, newY, angle };
     })
         .subscribe(({ newX, newY, angle }) => { g.attr("transform", "translate(" + newX + " " + newY + ") rotate(" + angle + ")"); }, () => { });
