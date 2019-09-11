@@ -18,289 +18,6 @@ const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) :
 const getRandomInt = (min: number, max: number) : number => 
   Math.floor(Math.random() * (max - min + 1) + min);
 
-
-function asteroids() {
-  // Inside this function you will use the classes and functions 
-  // defined in svgelement.ts and observable.ts
-  // to add visuals to the svg element in asteroids.html, animate them, and make them interactive.
-  // Study and complete the Observable tasks in the week 4 tutorial worksheet first to get ideas.
-
-  // You will be marked on your functional programming style
-  // as well as the functionality that you implement.
-  // Document your code!  
-  // Explain which ideas you have used ideas from the lectures to 
-  // create reusable, generic functions.
-
-  const svg = document.getElementById("canvas")!;
-
-  // let enemy = new Elem(svg, "ellipse")
-  //   .attr("cx", 300).attr("cy", 20)
-  //   .attr("rx", 50).attr("ry", 20)
-  //   .attr("fill", "navy")
-
-  
-  
-  // make a group for the spaceship and a transform to move it and rotate it
-  // to animate the spaceship you will update the transform property
-  let g = new Elem(svg,'g')
-    // translate is to move element to x = 300 and y = 300
-    // rotate 170 degrees clockwise
-    // .attr("transform","translate("+x+" "+y+") rotate("+angle+")")  
-    .attr("transform", "translate(300, 300) rotate(45)")
-    .attr("id", "ship")
-
-  // create a polygon shape for the space ship as a child of the transform group
-  let rect = new Elem(svg, 'polygon', g.elem) 
-    .attr("points","-15,20 15,20 0,-20")
-    .attr("style","fill:black; stroke:white; stroke-width:1")
-
-  const ship = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .map(key => ({
-      x: transformMatrix(g).m41,
-      y: transformMatrix(g).m42,
-      angle: getRotationDegrees($('#canvas #ship')),
-      key: key
-    }))
-
-  ship.filter(({key}) => key.code == "ArrowLeft")
-    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")})
-
-  ship.filter(({key}) => key.code == "ArrowRight")
-    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
-
-
-  let rocksArray: Array<Elem>;
-  
-  let speed = 5, multipler = 0;
-  
-  // function shipData = () => {
-  //   let spedd = 5; multipler = 0;
-  //   () => {
-
-  //   }
-  // }
-
-  const stopArrowUp = Observable.fromEvent<KeyboardEvent>(document, "keyup")
-    .filter(({code}) => code == "ArrowUp")
-    .subscribe(() => {
-      multipler = 0;
-      speed = 5;
-    })
-
-  const accelerateShip = ship.filter(({key}) => key.code == "ArrowUp")
-    .map(({x, y, angle}) => {
-      const xChange = speed * Math.sin(degToRad(angle)),
-            yChange = speed * Math.cos(degToRad(angle)),
-            newX = (x+xChange) < 0? svg.clientWidth : (x+xChange) > svg.clientWidth? 0 : x+xChange,
-            newY = (y-yChange) < 0? svg.clientHeight : (y-yChange) > svg.clientHeight? 0 : y-yChange;
-      if (speed < 300) {
-        speed += multipler;
-        multipler += 0.1;
-      }
-      return {newX, newY, angle}
-    })
-    .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")");})
-
-  
-
-  const deleteBullets = Observable.interval(1000)
-    .map(() => {
-      let bullets = svg.getElementsByTagName("circle");
-      if (bullets.length > 0) {
-        svg.removeChild(bullets[0]);
-      }
-    })
-
-  const bullets = ship.filter(({key}) => key.code == "Space")
-    .map(({x, y, angle}) => {
-      const bulletX = x + (20 * Math.sin(degToRad(angle))),
-            bulletY = y - (20 * Math.cos(degToRad(angle))),
-            bullet = new Elem(svg, "circle")
-                    .attr("cx", bulletX)
-                    .attr("cy", bulletY)
-                    .attr("r", 2)
-                    .attr("fill", "salmon");
-      return {bulletX, bulletY, bullet, angle};
-    })
-    .flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
-    .takeUntil(deleteBullets)
-    .map(() => {
-      const newX = bulletX + 5 * Math.sin(degToRad(angle)),
-            newY = bulletY - 5 * Math.cos(degToRad(angle));
-            bulletX = newX;
-            bulletY = newY;
-            bullet.attr("cx", newX).attr("cy", newY);
-      return {bulletX, bulletY, bullet, angle}
-    }))  
-
-
-
-  const rocks = Observable.interval(500)
-    .takeUntil(Observable.interval(1200))
-    .map(() => {
-      const rockPosition = getRandomRockPosition(),
-            size = 50,
-            angle = getRandomInt(0, 359),
-            xChange = size * Math.sin(degToRad(30)),
-            yChange = size * Math.cos(degToRad(30)),
-            newPoints = `${-xChange},${-yChange} ${xChange},${-yChange} ${size},${0} ${xChange},${yChange} ${-xChange},${yChange} ${-size},${0}`;
-
-      const rock = new Elem(svg, "polygon")
-        .attr("points", newPoints)
-        .attr("style","fill:black; stroke:cyan; stroke-width:1")
-        .attr("transform", "translate("+rockPosition.x+" "+rockPosition.y+") rotate("+angle+")")
-      
-      rocksArray.push(rock)
-      return rocksArray
-    })
-    .map(e => {
-
-    })
-
-    
-
-
-
-    // .flatMap(({rockPosition, rock, angle, size}) => Observable.interval(100)
-    //   .takeUntil(Observable.interval(100000000000000))
-    //   .map(() => {
-    //     const newX = rockPosition.x + 2 * Math.sin(degToRad(angle)),
-    //           newY = rockPosition.y - 2 * Math.cos(degToRad(angle)),
-    //           x = newX < -50? svg.clientWidth+50 : newX > (svg.clientWidth+50)? -50 : newX,
-    //           y = newY < -50? svg.clientHeight+50 : newY > (svg.clientHeight+50)? -50 : newY;
-    //     rockPosition.x = x;
-    //     rockPosition.y = y;
-    //     rock.attr("transform", "translate("+x+" "+y+") rotate("+angle+")")
-
-    //     return {rockPosition, rock, angle, size}
-    //   }))  
-
-  rocks.subscribe(() => {})
-
-  const asteroy = Observable.interval(500).map(() => rocksArray);
-
-  // rocks.flatMap(({rockPosition, rock, angle, size}) => bullets
-  //     .map(({bulletX, bulletY, bullet}) => ({rockPosition, rock, angle, size, bulletX, bulletY, bullet})))
-  //   .filter(({rockPosition, bulletX, bulletY, size}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < size)
-  //   .map(({rockPosition, rock, angle, size, bulletX, bulletY, bullet}) => {
-  //     rock.elem.parentNode!.removeChild(rock.elem);
-  //     bullet.elem.parentNode!.removeChild(bullet.elem)
-
-  //   })
-
-
-
-
-
-  // const createMiniRocks = function(x: number, y: number, size: number) {
-  //   const angle = getRandomInt(0, 359),
-  //         xChange = size * Math.sin(degToRad(30)),
-  //         yChange = size * Math.cos(degToRad(30)),
-  //         newPoints = `${-xChange},${-yChange} ${xChange},${-yChange} ${size},${0} ${xChange},${yChange} ${-xChange},${yChange} ${-size},${0}`;
-
-  //   let a = new Elem(svg, "polygon", rocks.elem)
-  //           .attr("points", newPoints)
-  //           .attr("style","fill:black; stroke:cyan; stroke-width:1")
-  //           .attr("transform", "translate("+(x + (size * Math.sin(degToRad(60))))+" "+(y + (size * Math.cos(degToRad(60))))+") rotate("+angle+")")
-
-  //   let b = new Elem(svg, "polygon", rocks.elem)
-  //     .attr("points", newPoints)
-  //     .attr("style","fill:black; stroke:cyan; stroke-width:1")
-  //     .attr("transform", "translate("+(x - (size * Math.sin(degToRad(60))))+" "+(y + (size * Math.cos(degToRad(60))))+") rotate("+angle+")")
-
-  //   let c = new Elem(svg, "polygon", rocks.elem)
-  //     .attr("points", newPoints)
-  //     .attr("style","fill:black; stroke:cyan; stroke-width:1")
-  //     .attr("transform", "translate("+x+" "+(y - size)+") rotate("+angle+")")
-
-  //   asteriodsArray.push(a)
-  //   asteriodsArray.push(b)
-  //   asteriodsArray.push(c)
-  // }
-
-  
-  // let k = moveBullets.map(({bulletX, bulletY}) => Observable.fromArray<Elem>(asteriodsArray)
-  //     // .forEach(e => console.log(e)))
-  //     // .subscribe(() => {
-  //     //   console.log("hello world")
-  //     //   // console.log(asteriodsArray);
-  //     // })
-  //   // .subscribe(() => {})
-  //   .filter(e => {
-  //     const rockX = transformMatrix(e).m41,
-  //           rockY = transformMatrix(e).m42,
-  //           size = Number(getAttributeValues(e, "points")[18])
-
-  //     return distanceBetweenPoints(rockX, rockY, bulletX, bulletY) < size
-  //   })
-  //   .map(e => {
-  //     const rockX = transformMatrix(e).m41,
-  //           rockY = transformMatrix(e).m42,
-  //           size = Number(getAttributeValues(e, "points")[18])
-
-  //     e.elem.parentNode!.removeChild(e.elem)
-  //     asteriodsArray.splice(asteriodsArray.indexOf(e), 1)
-
-  //     destroyBullet(svg)
-  //     createMiniRocks(rockX, rockY, size / 2);
-  //   }))
-  // k.subscribe(() => {})
-
- 
-  // Observable.interval(1000).takeUntil(Observable.interval(2500)).subscribe(() => console.log(asteriodsArray))
-
-  
-
-
-  // const collision = moveRocks.flatMap(({rockPosition, rock, size}) => moveBullets
-  //     .takeUntil(moveBullets
-  //       .filter(({bulletX, bulletY}) => distanceBetweenPoints(rockPosition.x, rockPosition.y, bulletX, bulletY) < 50)
-  //       .map(({bulletX, bulletY}) => {
-  //         // new Elem(svg, "rect")
-  //         // .attr("x", bulletX).attr("y", bulletY)
-  //         // .attr("width", 2).attr("height", 2)
-  //         // .attr("fill", "lime");
-          
-  //         rock.elem.parentNode!.removeChild(rock.elem);
-  //         $("circle").remove();
-  //       })
-  //       .filter(() => size > 15)
-        // .map(_ => {
-        //   const newSize = size / 2,
-        //         angle = getRandomInt(0, 359),
-        //         xChange = newSize * Math.sin(degToRad(30)),
-        //         yChange = newSize * Math.cos(degToRad(30)),
-        //         newPoints = `${-xChange},${-yChange} ${xChange},${-yChange} ${newSize},${0} ${xChange},${yChange} ${-xChange},${yChange} ${-newSize},${0}`;
-
-        //   new Elem(svg, "polygon")
-        //     .attr("points", newPoints)
-        //     .attr("style","fill:black; stroke:cyan; stroke-width:1")
-        //     .attr("transform", "translate("+(rockPosition.x + (newSize * Math.sin(degToRad(60))))+" "+(rockPosition.y + (newSize * Math.cos(degToRad(60))))+") rotate("+angle+")")
-
-        //   new Elem(svg, "polygon")
-        //     .attr("points", newPoints)
-        //     .attr("style","fill:black; stroke:cyan; stroke-width:1")
-        //     .attr("transform", "translate("+(rockPosition.x - (newSize * Math.sin(degToRad(60))))+" "+(rockPosition.y + (newSize * Math.cos(degToRad(60))))+") rotate("+angle+")")
-
-        //   new Elem(svg, "polygon")
-        //     .attr("points", newPoints)
-        //     .attr("style","fill:black; stroke:cyan; stroke-width:1")
-        //     .attr("transform", "translate("+rockPosition.x+" "+(rockPosition.y - newSize)+") rotate("+angle+")")
-        // })
-  //       ))
-  //     .subscribe(() => {})
-
-
-}
-
-
-function destroyBullet(svg: HTMLElement) {
-  let bullets = svg.getElementsByTagName("circle");
-  if (bullets.length > 0) {
-    svg.removeChild(bullets[0]);
-  }
-}
-
 function getRotationDegrees(obj: JQuery) {
     let matrix = obj.css("-webkit-transform") ||
     obj.css("-moz-transform")    ||
@@ -313,8 +30,6 @@ function getRotationDegrees(obj: JQuery) {
     let angle : number = Math.round(Math.atan2(b, a) * (180/Math.PI));
     return angle;
 }
-
-
 
 function getRandomRockPosition() {
   let y = getRandomInt(1, 599),
@@ -332,10 +47,249 @@ function getRandomRockPosition() {
 }
 
 
-
 function getAttributeValues(e: Elem, attribute: string) : RegExpMatchArray {
   return e.attr(attribute).match(/\d+/g)!;
 }
+
+
+
+function asteroids() {
+  // Inside this function you will use the classes and functions 
+  // defined in svgelement.ts and observable.ts
+  // to add visuals to the svg element in asteroids.html, animate them, and make them interactive.
+  // Study and complete the Observable tasks in the week 4 tutorial worksheet first to get ideas.
+
+  // You will be marked on your functional programming style
+  // as well as the functionality that you implement.
+  // Document your code!  
+  // Explain which ideas you have used ideas from the lectures to 
+  // create reusable, generic functions.
+
+  let score = 0;
+
+  const collisionDetection = (bullet: Elem, rocksArray: Array<[Elem, number]>) => {
+    const bulletX = Number(bullet.attr("cx")),
+          bulletY = Number(bullet.attr("cy"))
+
+    rocksArray
+      .filter(rockInfo => {
+        const rock = rockInfo[0],
+              rockX = Number(rock.attr("cx")),
+              rockY = Number(rock.attr("cy")),
+              radius = Number(rock.attr("r"))
+        return distanceBetweenPoints(bulletX, bulletY, rockX, rockY) < radius
+      })
+      .map(rockInfo => {
+        const rock = rockInfo[0],
+              radius = Number(rock.attr("r"))
+
+        bullet.attr("collided", 1)
+        console.log("score before = " + score);
+        score += radius;
+        console.log("score after = " + score);
+        svg.removeChild(rock.elem);
+        // rock.elem.parentNode!.removeChild(rock.elem);
+        rocksArray.splice(rocksArray.indexOf(rockInfo), 1);
+
+        document.getElementById("score")!.innerHTML = String(score)
+        return rockInfo
+      })
+      .filter(rockInfo => Number(rockInfo[0].attr("r")) > 20)
+      .map(rockInfo => {
+        const rock = rockInfo[0],
+              x = Number(rock.attr("cx")),
+              y = Number(rock.attr("cy")),
+              radius = Number(rock.attr("r")),
+              newSize = radius / 2
+        let a = new Elem(svg, "circle")
+            .attr("cx", x + 10 + (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
+            .attr("fill", "black").attr("stroke", "cyan")
+
+        let b = new Elem(svg, "circle")
+          .attr("cx", x - 10 - (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
+          .attr("fill", "black").attr("stroke", "cyan")
+
+        let c = new Elem(svg, "circle")
+          .attr("cx", x).attr("cy", y - 10 - newSize).attr("r", newSize)
+          .attr("fill", "black").attr("stroke", "cyan")
+
+        rocksArray.push([a, getRandomInt(0, 359)])
+        rocksArray.push([b, getRandomInt(0, 359)])
+        rocksArray.push([c, getRandomInt(0, 359)])
+      })   
+  }
+  const svg = document.getElementById("canvas")!;
+
+
+  
+  
+  let g = new Elem(svg,'g')
+    .attr("transform", "translate(300, 300) rotate(45)")
+    .attr("id", "ship")
+
+  let rect = new Elem(svg, 'polygon', g.elem) 
+    .attr("points","-15,20 15,20 0,-20")
+    .attr("style","fill:black; stroke:white; stroke-width:1")
+
+  let rocksArray: Array<[Elem, number]> = [];
+
+  const ship = Observable.fromEvent<KeyboardEvent>(document, "keydown")
+    .map(key => ({
+      x: transformMatrix(g).m41,
+      y: transformMatrix(g).m42,
+      angle: getRotationDegrees($('#canvas #ship')),
+      key: key
+    }))
+
+  ship.filter(({key}) => key.code == "ArrowLeft")
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")}, () => {})
+
+  ship.filter(({key}) => key.code == "ArrowRight")
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")}, () => {})
+  
+  let speed = 5, multipler = 0;
+  
+  // function shipData = () => {
+  //   let spedd = 5; multipler = 0;
+  //   return {
+  //     lala: () => {
+
+  //     }
+  //   }
+  // }
+
+
+  const stopArrowUp = Observable.fromEvent<KeyboardEvent>(document, "keyup")
+    .filter(({code}) => code == "ArrowUp")
+    .subscribe(() => {
+      multipler = 0;
+      speed = 5;
+    })
+
+  ship.filter(({key}) => key.code == "ArrowUp")
+    .map(({x, y, angle}) => {
+      const xChange = speed * Math.sin(degToRad(angle)),
+            yChange = speed * Math.cos(degToRad(angle)),
+            newX = (x+xChange) < 0? svg.clientWidth : (x+xChange) > svg.clientWidth? 0 : x+xChange,
+            newY = (y-yChange) < 0? svg.clientHeight : (y-yChange) > svg.clientHeight? 0 : y-yChange;
+      if (speed < 300) {
+        speed += multipler;
+        multipler += 0.1;
+      }
+      return {newX, newY, angle}
+    })
+    .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")")}, () => {})
+
+ 
+
+
+  const bullets = ship.filter(({key}) => key.code == "Space")
+    .map(({x, y, angle}) => {
+      const bulletX = x + (20 * Math.sin(degToRad(angle))),
+            bulletY = y - (20 * Math.cos(degToRad(angle))),
+            bullet = new Elem(svg, "circle")
+                    .attr("cx", bulletX)
+                    .attr("cy", bulletY)
+                    .attr("r", 2)
+                    .attr("fill", "salmon")
+                    .attr("class", "bullet")
+                    .attr("collided", 0);
+      return {bulletX, bulletY, bullet, angle};
+    })
+
+
+
+  // const fireBullets = bullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
+  //     .takeUntil(Observable
+  //       .interval(1000)
+  //       .filter(() => Number(bullet.attr("collided")) == 0)
+  //       .map(() => svg.removeChild(bullet.elem)))
+  //     .map(() => {
+  //       const newX = bulletX + 5 * Math.sin(degToRad(angle)),
+  //             newY = bulletY - 5 * Math.cos(degToRad(angle));
+  //             bulletX = newX;
+  //             bulletY = newY;
+  //       bullet.attr("cx", newX).attr("cy", newY);
+  //       collisionDetection(bullet, rocksArray);
+  //       return {bulletX, bulletY, bullet, angle}
+  //     }))
+
+  const fireBullets = bullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
+      .takeUntil(Observable
+        .interval(1000)
+        .filter(() => Number(bullet.attr("collided")) == 0)
+        .map(() => svg.removeChild(bullet.elem)))
+      .map(() => {
+        return {bulletX, bulletY, bullet, angle}
+      }))
+
+  
+  // let k = fireBullets.filter(({bullet}) => {
+  //    console.log(Number(bullet.attr("collided"))); 
+  //    return Number(bullet.attr("collided")) == 1
+  // })
+  // .subscribe(({bullet}) => {
+  //   console.log("running collided");
+  //   svg.removeChild(bullet.elem)
+  // })
+  
+  fireBullets.filter(({bullet}) => Number(bullet.attr("collided")) == 0).subscribe(({bulletX, bulletY, bullet, angle}) => {
+    const newX = Number(bullet.attr("cx")) + 5 * Math.sin(degToRad(angle)),
+          newY = Number(bullet.attr("cy")) - 5 * Math.cos(degToRad(angle));
+
+    bullet.attr("cx", newX).attr("cy", newY);
+    collisionDetection(bullet, rocksArray);
+    Number(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
+  })  
+
+
+
+  const spawnRocks = Observable.interval(500)  // generate every 0.5 seconds
+    .takeUntil(Observable.interval(5000))  // generate for 5 seconds
+    .map(() => {
+      const rockPosition = getRandomRockPosition(),
+            size = 40,
+            angle = getRandomInt(0, 359)
+
+      const rock = new Elem(svg, "circle")
+        .attr("cx", rockPosition.x).attr("cy", rockPosition.y).attr("r", size)
+        .attr("fill", "black").attr("stroke", "cyan")
+      rocksArray.push([rock, angle]);
+      return rocksArray
+    })
+
+  spawnRocks.subscribe(() => {})
+
+  const t = Observable.interval(100)
+    .takeUntil(Observable.interval(1000000000))
+    .flatMap(() => Observable.fromArray(rocksArray))
+    .forEach(rockInfo => {
+      const rock = rockInfo[0],
+            angle = rockInfo[1],
+            newX = Number(rock.attr("cx")) + 2 * Math.sin(degToRad(angle)),
+            newY = Number(rock.attr("cy")) - 2 * Math.cos(degToRad(angle)),
+            radius = Number(rock.attr("r")),
+            x = newX < -radius? svg.clientWidth+radius : newX > (svg.clientWidth+radius)? -radius : newX,
+            y = newY < -radius? svg.clientHeight+radius : newY > (svg.clientHeight+radius)? -radius : newY
+      rock.attr("cx", x).attr("cy", y)
+    })
+
+
+  // t.filter(rockInfo => {
+  //   const rockX = Number(rockInfo[0].attr("cx")),
+  //         rockY = Number(rockInfo[0].attr("cy")),
+  //         radius = Number(rockInfo[0].attr("r")),
+  //         x = transformMatrix(g).m41,
+  //         y = transformMatrix(g).m42
+  //   return distanceBetweenPoints(x, y, rockX, rockY) < radius
+  // })
+
+    
+  t.subscribe(() => {})
+
+
+}
+
 
 
 // the following simply runs your asteroids function on window load.  Make sure to leave it in place.
