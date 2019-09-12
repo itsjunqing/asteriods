@@ -1,23 +1,46 @@
 // FIT2102 2019 Assignment 1
 // https://docs.google.com/document/d/1Gr-M6LTU-tfm4yabqZWJYg-zTjEVqHKKTCvePGCYsUA/edit?usp=sharing
 
+/**
+ * Converts an angle of radians to degrees
+ */
 const radToDeg = (rad:number) => 
   rad * 180 / Math.PI;
 
+/**
+ * Converts an angle of degrees to radians
+ */
 const degToRad = (deg: number) => 
   deg * Math.PI / 180;
 
+/**
+ * Returns a CSS Matrix of the transform attribute of the element
+ */
 const transformMatrix = 
   (e:Elem) => new WebKitCSSMatrix(window.getComputedStyle(e.elem).webkitTransform);
 
-const transform = (e: Element) => new WebKitCSSMatrix(window.getComputedStyle(e).webkitTransform)
-
+/**
+ * Returns the distance between two coordinates
+ */
 const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) : number => 
   Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));   
 
+/**
+ * Gets a random integer number within the bounded size (inclusive of max and min value itself)
+ */
 const getRandomInt = (min: number, max: number) : number => 
   Math.floor(Math.random() * (max - min + 1) + min);
 
+/**
+ * Returns a new coordinate of x and y after moving the old coordinates
+ */
+const getMovement = (x: number, y: number, value: number, angle: number) => 
+  ({x: x + value * Math.sin(degToRad(angle)), y: y - value * Math.cos(degToRad(angle))})
+
+/**
+ * Returns the rotation angle of a transformed element using jQuery
+ * Inspired by https://stackoverflow.com/questions/8270612/get-element-moz-transformrotate-value-in-jquery
+ */
 function getRotationDegrees(obj: JQuery) {
     let matrix = obj.css("-webkit-transform") ||
     obj.css("-moz-transform")    ||
@@ -31,6 +54,7 @@ function getRotationDegrees(obj: JQuery) {
     return angle;
 }
 
+//ok?
 function getRandomRockPosition() {
   let y = getRandomInt(1, 599),
       x;
@@ -54,31 +78,42 @@ function getAttributeValues(e: Elem, attribute: string) : RegExpMatchArray {
 
 
 function asteroids() {
-  // Inside this function you will use the classes and functions 
-  // defined in svgelement.ts and observable.ts
-  // to add visuals to the svg element in asteroids.html, animate them, and make them interactive.
-  // Study and complete the Observable tasks in the week 4 tutorial worksheet first to get ideas.
+  //ok?
+  let 
+    score = 0,
+    level = 1,
+    rocksArray: [Elem, number][] = []
+  
+  const 
+    svg = document.getElementById("canvas")!,
 
-  // You will be marked on your functional programming style
-  // as well as the functionality that you implement.
-  // Document your code!  
-  // Explain which ideas you have used ideas from the lectures to 
-  // create reusable, generic functions.
+    g = new Elem(svg,'g')
+      .attr("transform", "translate(300, 300) rotate(0)")
+      .attr("id", "ship"),
 
-  let score = 0, level = 1;
+    rocket = new Elem(svg, 'polygon', g.elem) 
+      .attr("points","-15,20 15,20 0,-20")
+      .attr("style","fill:black; stroke:white; stroke-width:1"),
 
+
+    // boss = new Elem(svg, "ellipse")
+    //   .attr("cx", 300).attr("cy", 40).attr("rx", 80).attr("ry", 40).attr("fill", "gray").attr("visibility", "visible"),
+
+
+    keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown"),
+    keyUp = Observable.fromEvent<KeyboardEvent>(document, "keyup"),
+
+    ship = keyDown.map(key => ({
+      x: transformMatrix(g).m41,
+      y: transformMatrix(g).m42,
+      angle: getRotationDegrees($('#canvas #ship')),
+      key: key
+    }))
+
+//map?
   const collisionDetection = (bullet: Elem, rocksArray: Array<[Elem, number]>) => {
-    const bulletX = Number(bullet.attr("cx")),
-          bulletY = Number(bullet.attr("cy"))
-
-    rocksArray
-      .filter(rockInfo => {
-        const rock = rockInfo[0],
-              rockX = Number(rock.attr("cx")),
-              rockY = Number(rock.attr("cy")),
-              radius = Number(rock.attr("r"))
-        return distanceBetweenPoints(bulletX, bulletY, rockX, rockY) < radius
-      })
+    let k =rocksArray
+      .filter(rockInfo => distanceBetweenPoints(Number(bullet.attr("cx")), Number(bullet.attr("cy")), Number(rockInfo[0].attr("cx")), Number(rockInfo[0].attr("cy"))) < Number(rockInfo[0].attr("r")))
       .map(rockInfo => {
         const rock = rockInfo[0],
               radius = Number(rock.attr("r"))
@@ -98,51 +133,37 @@ function asteroids() {
               newSize = radius / 2
         let a = new Elem(svg, "circle")
             .attr("cx", x + 10 + (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
-            .attr("fill", "black").attr("stroke", "cyan")
+            .attr("fill", "black").attr("stroke", "yellow")
 
         let b = new Elem(svg, "circle")
           .attr("cx", x - 10 - (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
-          .attr("fill", "black").attr("stroke", "cyan")
+          .attr("fill", "black").attr("stroke", "yellow")
 
         let c = new Elem(svg, "circle")
           .attr("cx", x).attr("cy", y - 10 - newSize).attr("r", newSize)
-          .attr("fill", "black").attr("stroke", "cyan")
+          .attr("fill", "black").attr("stroke", "yellow")
 
         rocksArray.push([a, getRandomInt(0, 359)])
         rocksArray.push([b, getRandomInt(0, 359)])
         rocksArray.push([c, getRandomInt(0, 359)])
       })   
   }
-  const svg = document.getElementById("canvas")!;
-
-
+  
+  const getWrapValue = (x: number, y: number, offset: number) => 
+    ({x: x < -offset? svg.clientWidth + offset : x > svg.clientWidth + offset? -offset : x, 
+      y: y < -offset? svg.clientHeight + offset : y > svg.clientHeight + offset? -offset : y})
   
   
-  let g = new Elem(svg,'g')
-    .attr("transform", "translate(300, 300) rotate(0)")
-    .attr("id", "ship")
+  
 
-  let rect = new Elem(svg, 'polygon', g.elem) 
-    .attr("points","-15,20 15,20 0,-20")
-    .attr("style","fill:black; stroke:white; stroke-width:1")
-
-  let rocksArray: Array<[Elem, number]> = [];
-
-  const ship = Observable.fromEvent<KeyboardEvent>(document, "keydown")
-    .map(key => ({
-      x: transformMatrix(g).m41,
-      y: transformMatrix(g).m42,
-      angle: getRotationDegrees($('#canvas #ship')),
-      key: key
-    }))
-
+  // rotates the ship to the left by transforming to a new angle, reusing the ship observable
   ship.filter(({key}) => key.code == "ArrowLeft")
-    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")}, () => {})
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")})
 
+  // rotates the ship to the right by transforming to a new angle, reusing the ship observable  
   ship.filter(({key}) => key.code == "ArrowRight")
-    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")}, () => {})
+    .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
   
-  let speed = 5, multipler = 0;
   
   
   const speedController = () => {
@@ -150,16 +171,16 @@ function asteroids() {
 
     return {
       accelerate: () => {
-        speed = speed < 200? speed + multipler : speed
-        multipler += 0.1;
+        speed = speed < 200? speed + multiplier : speed
+        multiplier += 0.1;
       },
 
       decelerate: () => {
         Observable.interval(10)
           .takeUntil(Observable.interval(5000))
           .subscribe(() => {
-            speed -= multipler;
-            multipler -= 0.1;
+            speed -= multiplier;
+            multiplier -= 0.1;
           })
       },
 
@@ -167,7 +188,7 @@ function asteroids() {
 
       reset: () => {
         speed = 5
-        multipler = 0
+        multiplier = 0
       }
 
     }
@@ -194,88 +215,69 @@ function asteroids() {
     })
     .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")")}, () => {})
 
- 
 
 
-  const bullets = ship.filter(({key}) => key.code == "Space")
+  const constructBullets = ship.filter(({key}) => key.code == "Space")
     .map(({x, y, angle}) => {
-      const bulletX = x + (20 * Math.sin(degToRad(angle))),
-            bulletY = y - (20 * Math.cos(degToRad(angle))),
-            bullet = new Elem(svg, "circle")
-                    .attr("cx", bulletX)
-                    .attr("cy", bulletY)
-                    .attr("r", 2)
-                    .attr("fill", "salmon")
-                    .attr("class", "bullet")
-                    .attr("collided", 0);
-      return {bulletX, bulletY, bullet, angle};
+      const coordinate = getMovement(x, y, 20, angle),
+            bullet = new Elem(svg, "circle").attr("cx", coordinate.x).attr("cy", coordinate.y).attr("r", 2).attr("fill", "salmon").attr("collided", 0);
+      return {bullet, angle};
     })
 
 
-  const fireBullets = bullets.flatMap(({bulletX, bulletY, bullet, angle}) => Observable.interval(10)
-      .takeUntil(Observable
-        .interval(1000)
+  constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
+      .takeUntil(Observable.interval(1000)
         .filter(() => Number(bullet.attr("collided")) == 0)
         .map(() => svg.removeChild(bullet.elem)))
-      .map(() => {
-        return {bulletX, bulletY, bullet, angle}
-      }))
-
-  
-  fireBullets.filter(({bullet}) => Number(bullet.attr("collided")) == 0).subscribe(({bulletX, bulletY, bullet, angle}) => {
-    const newX = Number(bullet.attr("cx")) + 5 * Math.sin(degToRad(angle)),
-          newY = Number(bullet.attr("cy")) - 5 * Math.cos(degToRad(angle));
-
-    bullet.attr("cx", newX).attr("cy", newY);
-    collisionDetection(bullet, rocksArray);
-    Number(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
-  })  
+      .map(() => ({bullet, angle})))
+    .filter(({bullet}) => Number(bullet.attr("collided")) == 0)
+    .subscribe(({bullet, angle}) => {
+      const coordinate = getMovement(Number(bullet.attr("cx")), Number(bullet.attr("cy")), 5, angle);
+      bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
+      collisionDetection(bullet, rocksArray);
+      Number(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
+    })  
 
 
 
-  const spawnRocks = Observable.interval(500)  // generate every 0.5 seconds
+  Observable.interval(500)  // generate every 0.5 seconds
     .takeUntil(Observable.interval(5000))  // generate for 5 seconds
-    .map(() => {
+    .subscribe(() => {
       const rockPosition = getRandomRockPosition(),
-            size = 40,
-            angle = getRandomInt(0, 359)
-
-      const rock = new Elem(svg, "circle")
-        .attr("cx", rockPosition.x).attr("cy", rockPosition.y).attr("r", size)
-        .attr("fill", "black").attr("stroke", "cyan")
-      rocksArray.push([rock, angle]);
-      return rocksArray
+            rock = new Elem(svg, "circle").attr("cx", rockPosition.x).attr("cy", rockPosition.y).attr("r", 40).attr("fill", "black").attr("stroke", "orange")
+      rocksArray.push([rock, getRandomInt(0, 359)]);
     })
 
-  spawnRocks.subscribe(() => {})
 
-  const t = Observable.interval(100)
+
+  const rocksMovement = Observable.interval(100)
     .takeUntil(Observable.interval(1000000000))
     .flatMap(() => Observable.fromArray(rocksArray))
     .forEach(rockInfo => {
-      const rock = rockInfo[0],
-            angle = rockInfo[1],
-            newX = Number(rock.attr("cx")) + 2 * Math.sin(degToRad(angle)),
-            newY = Number(rock.attr("cy")) - 2 * Math.cos(degToRad(angle)),
-            radius = Number(rock.attr("r")),
-            x = newX < -radius? svg.clientWidth+radius : newX > (svg.clientWidth+radius)? -radius : newX,
-            y = newY < -radius? svg.clientHeight+radius : newY > (svg.clientHeight+radius)? -radius : newY
-      rock.attr("cx", x).attr("cy", y)
+      const rock = rockInfo[0], angle = rockInfo[1], radius = Number(rock.attr("r")),
+            point = getMovement(Number(rock.attr("cx")), Number(rock.attr("cy")), 2, angle),
+            coordinate = getWrapValue(point.x, point.y, radius)
+      rock.attr("cx", coordinate.x).attr("cy", coordinate.y)
     })
 
   // TO END GAME WHEN ROCKS COLLIDE WITH SHIP
-  // t.filter(rockInfo => {
-  //   const rockX = Number(rockInfo[0].attr("cx")),
-  //         rockY = Number(rockInfo[0].attr("cy")),
-  //         radius = Number(rockInfo[0].attr("r")),
-  //         x = transformMatrix(g).m41,
-  //         y = transformMatrix(g).m42
-  //   return distanceBetweenPoints(x, y, rockX, rockY) < radius
+  rocksMovement.filter(rockInfo => {
+    const rockX = Number(rockInfo[0].attr("cx")),
+          rockY = Number(rockInfo[0].attr("cy")),
+          radius = Number(rockInfo[0].attr("r")),
+          x = transformMatrix(g).m41,
+          y = transformMatrix(g).m42
+    return distanceBetweenPoints(x, y, rockX, rockY) < radius
+  })
+  // .subscribe(() => {
+  //   svg.removeChild(g.elem)
   // })
 
 
     
-  t.subscribe(() => {})
+  rocksMovement.subscribe(() => {})
+
+
 
 
 }
