@@ -37,6 +37,10 @@ const getRandomInt = (min: number, max: number) : number =>
 const getMovement = (x: number, y: number, value: number, angle: number) => 
   ({x: x + value * Math.sin(degToRad(angle)), y: y - value * Math.cos(degToRad(angle))})
 
+const getWrapValue = (x: number, y: number, offset: number, svg: HTMLElement) => 
+  ({x: x < -offset? svg.clientWidth + offset : x > svg.clientWidth + offset? -offset : x, 
+    y: y < -offset? svg.clientHeight + offset : y > svg.clientHeight + offset? -offset : y})
+
 /**
  * Returns the rotation angle of a transformed element using jQuery
  * Inspired by https://stackoverflow.com/questions/8270612/get-element-moz-transformrotate-value-in-jquery
@@ -71,37 +75,107 @@ function getRandomRockPosition() {
 }
 
 
-function getAttributeValues(e: Elem, attribute: string) : RegExpMatchArray {
-  return e.attr(attribute).match(/\d+/g)!;
-}
+const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, asteriodsGroup: Elem, svg: HTMLElement) => {
+  asteriodsBelt
+    .filter(asteriodData => {
+      const 
+        bulletX = parseInt(bullet.attr("cx")),
+        bulletY = parseInt(bullet.attr("cy")),
+        asteriodX = parseInt(asteriodData[0].attr("cx")),
+        asteriodY = parseInt(asteriodData[0].attr("cy")),
+        asteriodRadius = parseInt(asteriodData[0].attr("r"))
+      return distanceBetweenPoints(bulletX, bulletY, asteriodX, asteriodY) < asteriodRadius
+    })
 
+    .map(asteriodData => {
+      const asteriod = asteriodData[0],
+            radius = parseInt(asteriod.attr("r")),
+            score = parseInt(document.getElementById("score")!.innerText),
+            level = parseInt(document.getElementById("level")!.innerText)
+
+      bullet.attr("collided", 1);
+      asteriodsGroup.elem.removeChild(asteriod.elem);
+      asteriodsBelt.splice(asteriodsBelt.indexOf(asteriodData), 1);
+      document.getElementById("score")!.innerText = String(score + radius)
+      document.getElementById("level")!.innerText = (score + radius) >= (level * 2000)? String(level + 1) : String(level)
+      return asteriodData
+    })
+
+    .filter(asteriodData => parseInt(asteriodData[0].attr("r")) > 20)
+
+    .map(asteriodData => {
+      const 
+        asteriod = asteriodData[0],
+        x = parseInt(asteriod.attr("cx")),
+        y = parseInt(asteriod.attr("cy")),
+        radius = parseInt(asteriod.attr("r")),
+        newSize = radius / 2, 
+
+        a = new Elem(svg, "circle", asteriodsGroup.elem)
+          .attr("cx", x + 10 + (newSize * Math.sin(degToRad(60))))
+          .attr("cy", y + 10 + (newSize * Math.cos(degToRad(60))))
+          .attr("r", newSize)
+          .attr("fill", "black").attr("stroke", "yellow"),
+
+        b = new Elem(svg, "circle", asteriodsGroup.elem)
+          .attr("cx", x - 10 - (newSize * Math.sin(degToRad(60))))
+          .attr("cy", y + 10 + (newSize * Math.cos(degToRad(60))))
+          .attr("r", newSize)
+          .attr("fill", "black").attr("stroke", "yellow"),
+
+        c = new Elem(svg, "circle", asteriodsGroup.elem)
+          .attr("cx", x)
+          .attr("cy", y - 10 - newSize)
+          .attr("r", newSize)
+          .attr("fill", "black")
+          .attr("stroke", "yellow")
+
+      asteriodsBelt.push([a, getRandomInt(0, 359)])
+      asteriodsBelt.push([b, getRandomInt(0, 359)])
+      asteriodsBelt.push([c, getRandomInt(0, 359)])
+    })   
+  }
 
 
 function asteroids() {
-  //ok?
-  let 
-    score = 0,
-    level = 1,
-    rocksArray: [Elem, number][] = []
+  // an impure array to keep track of the available asteriods in the map, it is a design choice so that we can mutate the position of the asteriods around the map
+  let asteriodsBelt: [Elem, number][] = []
   
   const 
+    // a resetGame function that resets the game to the starting point without changing the player's score by removing all asteriods in the map resets the rocket's position to the center
+    resetGame = () => {
+      $(asteriodsGroup.elem).empty()
+      asteriodsBelt.length = 0;
+      g.attr("transform", "translate(300 300) rotate(0)")
+    },
+
+    // an SVG canvas representing the map
     svg = document.getElementById("canvas")!,
 
+    // a container for the rocket to move
     g = new Elem(svg,'g')
       .attr("transform", "translate(300, 300) rotate(0)")
-      .attr("id", "ship"),
+      .attr("id", "rocket"),
 
+    // a rocket Polygon to move around the map
     rocket = new Elem(svg, 'polygon', g.elem) 
       .attr("points","-15,20 15,20 0,-20")
       .attr("style","fill:black; stroke:white; stroke-width:1"),
 
+    // a container to store all asteriods 
+    asteriodsGroup = new Elem(svg, "g"),
 
     // boss = new Elem(svg, "ellipse")
-    //   .attr("cx", 300).attr("cy", 40).attr("rx", 80).attr("ry", 40).attr("fill", "gray").attr("visibility", "visible"),
+    //   .attr("cx", 300).attr("cy", 40).attr("rx", 80).attr("ry", 40).attr("fill", "gray").attr("visibility", "hidden"),
 
 
-    keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown"),
-    keyUp = Observable.fromEvent<KeyboardEvent>(document, "keyup"),
+    // Observable that runs for every 10 milliseconds to determine if the game ends
+    endGame = Observable.interval(10).filter(() => document.getElementById("gameover")!.getAttribute("visibility") == "visible"),
+
+    // Observables that fires when it observes a keydown or keyup is pressed and stop streaming values when the game ends
+    keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown").takeUntil(endGame),
+    keyUp = Observable.fromEvent<KeyboardEvent>(document, "keyup").takeUntil(endGame),
+
 
     ship = keyDown.map(key => ({
       x: transformMatrix(g).m41,
@@ -110,51 +184,7 @@ function asteroids() {
       key: key
     }))
 
-//map?
-  const collisionDetection = (bullet: Elem, rocksArray: Array<[Elem, number]>) => {
-    let k =rocksArray
-      .filter(rockInfo => distanceBetweenPoints(Number(bullet.attr("cx")), Number(bullet.attr("cy")), Number(rockInfo[0].attr("cx")), Number(rockInfo[0].attr("cy"))) < Number(rockInfo[0].attr("r")))
-      .map(rockInfo => {
-        const rock = rockInfo[0],
-              radius = Number(rock.attr("r"))
-        score += radius
-        bullet.attr("collided", 1)
-        svg.removeChild(rock.elem);
-        rocksArray.splice(rocksArray.indexOf(rockInfo), 1);
-        document.getElementById("score")!.innerHTML = String(score)
-        return rockInfo
-      })
-      .filter(rockInfo => Number(rockInfo[0].attr("r")) > 20)
-      .map(rockInfo => {
-        const rock = rockInfo[0],
-              x = Number(rock.attr("cx")),
-              y = Number(rock.attr("cy")),
-              radius = Number(rock.attr("r")),
-              newSize = radius / 2
-        let a = new Elem(svg, "circle")
-            .attr("cx", x + 10 + (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
-            .attr("fill", "black").attr("stroke", "yellow")
 
-        let b = new Elem(svg, "circle")
-          .attr("cx", x - 10 - (newSize * Math.sin(degToRad(60)))).attr("cy", y + 10 + (newSize * Math.cos(degToRad(60)))).attr("r", newSize)
-          .attr("fill", "black").attr("stroke", "yellow")
-
-        let c = new Elem(svg, "circle")
-          .attr("cx", x).attr("cy", y - 10 - newSize).attr("r", newSize)
-          .attr("fill", "black").attr("stroke", "yellow")
-
-        rocksArray.push([a, getRandomInt(0, 359)])
-        rocksArray.push([b, getRandomInt(0, 359)])
-        rocksArray.push([c, getRandomInt(0, 359)])
-      })   
-  }
-  
-  const getWrapValue = (x: number, y: number, offset: number) => 
-    ({x: x < -offset? svg.clientWidth + offset : x > svg.clientWidth + offset? -offset : x, 
-      y: y < -offset? svg.clientHeight + offset : y > svg.clientHeight + offset? -offset : y})
-  
-  
-  
 
   // rotates the ship to the left by transforming to a new angle, reusing the ship observable
   ship.filter(({key}) => key.code == "ArrowLeft")
@@ -167,116 +197,183 @@ function asteroids() {
   
   
   const speedController = () => {
-    let speed = 5, multiplier = 0;
-
+    let speed = 0, multipler = 0.2
     return {
       accelerate: () => {
-        speed = speed < 200? speed + multiplier : speed
-        multiplier += 0.1;
+        speed = speed < 8? parseFloat((speed + multipler).toFixed(1)): speed
+        // console.log("accelrtea speed = " + speed);
+        multipler = speed < 8? parseFloat((multipler + 0.2).toFixed(1)) : multipler
+        // console.log("multiplier = " + multipler);
       },
-
-      decelerate: () => {
-        Observable.interval(10)
-          .takeUntil(Observable.interval(5000))
-          .subscribe(() => {
-            speed -= multiplier;
-            multiplier -= 0.1;
-          })
+      deccelerate: () => {
+        speed = speed > 0? parseFloat((speed - 0.1).toFixed(1)): 0
+        multipler = speed > 0? multipler - 0.001 : multipler
+        // console.log("decleerate speed = " + speed);
       },
-
       getSpeed: () => speed,
 
       reset: () => {
         speed = 5
-        multiplier = 0
       }
-
     }
   }
 
   let shipController = speedController();
-
-  const stopArrowUp = Observable.fromEvent<KeyboardEvent>(document, "keyup")
-    .filter(({code}) => code == "ArrowUp")
-    // .flatMap(() => Observable.interval())
-    .subscribe(() => {
-      shipController.reset();
+  let afdsa = Observable.interval(10)
+    .map(() => {
+      const x = transformMatrix(g).m41,
+            y = transformMatrix(g).m42,
+            angle = getRotationDegrees($('#canvas #ship'))
+      return {x, y, angle}
     })
+    .subscribe(({x, y, angle})=> {
+      shipController.deccelerate();
+      console.log(shipController.getSpeed());
+      const movement = getMovement(x, y, shipController.getSpeed(), angle),
+            coordinate = getWrapValue(movement.x, movement.y, 0, svg)
+      g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+    })
+
 
   ship.filter(({key}) => key.code == "ArrowUp")
-    .map(({x, y, angle}) => {
-      const xChange = shipController.getSpeed() * Math.sin(degToRad(angle)),
-            yChange = shipController.getSpeed() * Math.cos(degToRad(angle)),
-            newX = (x+xChange) < 0? svg.clientWidth : (x+xChange) > svg.clientWidth? 0 : x+xChange,
-            newY = (y-yChange) < 0? svg.clientHeight : (y-yChange) > svg.clientHeight? 0 : y-yChange;
-
-      shipController.accelerate();
-      return {newX, newY, angle}
-    })
-    .subscribe(({newX, newY, angle}) => {g.attr("transform", "translate("+newX+" "+newY+") rotate("+angle+")")}, () => {})
+    .subscribe(() => shipController.accelerate())
 
 
 
+
+
+  // keyUp.filter(({code}) => code == "ArrowUp")
+  //   .flatMap(() => ship)
+  //   .map(({x, y, angle}) => {
+  //     Observable.interval(10).takeUntil(Observable.interval(2000))
+  //     .map(() => {
+  //       const movement = getMovement(x, y, shipController.getSpeed(), angle),
+  //             coordinate = getWrapValue(movement.x, movement.y, 0)
+  //       g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+  //       shipController.decelerate();
+  //     })
+  //     .subscribe(() => {})
+  //   })
+  //   .subscribe(() => {})
+    // .flatMap(({x, y, angle}) => Observable.interval(10).takeUntil(Observable.interval(2000))
+    //   .map(() => {
+    //     const movement = getMovement(x, y, shipController.getSpeed(), angle),
+    //         coordinate = getWrapValue(movement.x, movement.y, 0)        
+    //     shipController.decelerate()
+    //     return {x: coordinate.x, y: coordinate.y, angle}
+    //   }))
+    // .subscribe(({x, y, angle}) => {
+    //   g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")")
+    // })
+
+  // keyUp.filter(key => key.code == "ArrowUp")
+  //   .subscribe(() => {
+  //     shipController.reset();
+  //   })
+
+  // ship.filter(({key}) => key.code == "ArrowUp")
+  //   .subscribe(({x, y, angle}) => {
+  //     const movement = getMovement(x, y, shipController.getSpeed(), angle), 
+  //           coordinate = getWrapValue(movement.x, movement.y, 0, svg)
+
+  //     g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+      
+  //     shipController.accelerate();
+  //     console.log(shipController.getSpeed());
+  //   })
+
+
+  /**
+   * Fires a bullet at the peak of the ship when space button is pressed and returns the properties of the generated bullet
+   */
   const constructBullets = ship.filter(({key}) => key.code == "Space")
     .map(({x, y, angle}) => {
       const coordinate = getMovement(x, y, 20, angle),
-            bullet = new Elem(svg, "circle").attr("cx", coordinate.x).attr("cy", coordinate.y).attr("r", 2).attr("fill", "salmon").attr("collided", 0);
+            bullet = new Elem(svg, "circle")
+              .attr("cx", coordinate.x)
+              .attr("cy", coordinate.y)
+              .attr("r", 2)
+              .attr("fill", "salmon")
+              .attr("collided", 0);
       return {bullet, angle};
     })
 
 
+  /**
+   * This observable will move the bullet generated every 10 milliseconds and stop moving it after 1 second. 
+   * This bullet will be deleted after 1 second  if it did not collide with any asterids, so filter is used to determine the collision after 1 second.
+   * At each bullet's new position, the bullet is passed to a collisionDetection function if the bullet collides with any asteriods
+   */
   constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
       .takeUntil(Observable.interval(1000)
-        .filter(() => Number(bullet.attr("collided")) == 0)
+        .filter(() => parseInt(bullet.attr("collided")) == 0)
         .map(() => svg.removeChild(bullet.elem)))
       .map(() => ({bullet, angle})))
-    .filter(({bullet}) => Number(bullet.attr("collided")) == 0)
+    .filter(({bullet}) => parseInt(bullet.attr("collided")) == 0)
     .subscribe(({bullet, angle}) => {
-      const coordinate = getMovement(Number(bullet.attr("cx")), Number(bullet.attr("cy")), 5, angle);
+      const coordinate = getMovement(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), 5, angle);
       bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
-      collisionDetection(bullet, rocksArray);
-      Number(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
+      collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
+      parseInt(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
     })  
 
+  
 
 
-  Observable.interval(500)  // generate every 0.5 seconds
-    .takeUntil(Observable.interval(5000))  // generate for 5 seconds
+  /**
+   * An observable that will generate a randomly positioned new asteriod for every 2 seconds.
+   * The new asteriod generated will be added into an array of asteriods so that we can move all asteriods at once in a new observable.
+   * This observable will stop streaming (stop generating) the values when the game ends.
+   */
+  Observable.interval(10)  
+    .takeUntil(endGame)
     .subscribe(() => {
-      const rockPosition = getRandomRockPosition(),
-            rock = new Elem(svg, "circle").attr("cx", rockPosition.x).attr("cy", rockPosition.y).attr("r", 40).attr("fill", "black").attr("stroke", "orange")
-      rocksArray.push([rock, getRandomInt(0, 359)]);
+      const asteriodPosition = getRandomRockPosition(),
+            asteriod = new Elem(svg, "circle", asteriodsGroup.elem)
+              .attr("cx", asteriodPosition.x)
+              .attr("cy", asteriodPosition.y)
+              .attr("r", 40)
+              .attr("fill", "black")
+              .attr("stroke", "orange")
+      asteriodsBelt.push([asteriod, getRandomInt(0, 359)]);
     })
 
 
+  /**
+   * An observable that moves all the asteriods that exist in the map every 100 milliseconds. 
+   * The array of asteriods is flatmapped with the interval observable so that the observable is able to stream all asteriods that exist in the map, and move them accordingly.
+   * The speed in which the asteriods move depeneds on the game's level, so higher level will move the asteriods faster.
+   */
+   Observable.interval(100)
+    .takeUntil(endGame)
+    .flatMap(() => Observable.fromArray(asteriodsBelt))
+    .forEach(asteriodData => {
+      const asteriod = asteriodData[0], 
+            angle = asteriodData[1], 
+            radius = parseInt(asteriod.attr("r")), 
+            level = parseInt(document.getElementById("level")!.innerText),
+            point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 1 * level, angle),
+            coordinate = getWrapValue(point.x, point.y, radius, svg)
 
-  const rocksMovement = Observable.interval(100)
-    .takeUntil(Observable.interval(1000000000))
-    .flatMap(() => Observable.fromArray(rocksArray))
-    .forEach(rockInfo => {
-      const rock = rockInfo[0], angle = rockInfo[1], radius = Number(rock.attr("r")),
-            point = getMovement(Number(rock.attr("cx")), Number(rock.attr("cy")), 2, angle),
-            coordinate = getWrapValue(point.x, point.y, radius)
-      rock.attr("cx", coordinate.x).attr("cy", coordinate.y)
+      asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y)
     })
-
-  // TO END GAME WHEN ROCKS COLLIDE WITH SHIP
-  rocksMovement.filter(rockInfo => {
-    const rockX = Number(rockInfo[0].attr("cx")),
-          rockY = Number(rockInfo[0].attr("cy")),
-          radius = Number(rockInfo[0].attr("r")),
-          x = transformMatrix(g).m41,
-          y = transformMatrix(g).m42
-    return distanceBetweenPoints(x, y, rockX, rockY) < radius
-  })
-  // .subscribe(() => {
-  //   svg.removeChild(g.elem)
-  // })
-
-
-    
-  rocksMovement.subscribe(() => {})
-
+    .filter(asteriodData => {
+      const asteriodX = parseInt(asteriodData[0].attr("cx")),
+            asteriodY = parseInt(asteriodData[0].attr("cy")),
+            radius = parseInt(asteriodData[0].attr("r")),
+            x = transformMatrix(g).m41,
+            y = transformMatrix(g).m42
+      return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
+    })
+    .subscribe(() => {
+      const lives = Number(document.getElementById("lives")!.innerText)
+      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+      resetGame();
+      if (lives == 0) {
+         document.getElementById("gameover")!.setAttribute("visibility", "visible")
+         svg.removeChild(g.elem)
+       } 
+    })
 
 
 

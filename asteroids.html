@@ -15,15 +15,14 @@
         <script src="observable.js"></script>
         <script src="asteroids.js"></script>
         <script type="text/javascript" src="jquery-3.4.1.min.js"></script>
-        <link rel="stylesheet" type="text/css" src="font-awesome.css">
     </head>
     <body>
         <h1>Asteroids</h1>
         <hr>
-        <h1>Lives: <span id="lives"><i class="fas fa-rocket"></i></span></h1>
-        <h1>Score: <span id="score">0</span> ----- Level: <span id="level">1</span></h1>
+        <h2>Number of Lives: <span id="lives">3</span></h1>
+        <h2>Score: <span id="score">0</span> ---------- Level: <span id="level">1</span></h1>
         <svg id="canvas" width="600" height="600">
-            <text>testing</text>
+            <text x="60" y="300" font-size="80px" fill="red" visibility="hidden" id="gameover">GAME OVER</text>
         </svg>
 
     </body>
