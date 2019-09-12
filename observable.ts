@@ -77,7 +77,8 @@ class Observable<Input> {
   subscribe(next:(_:Input)=>void, complete?: ()=>void): ()=>void {
     const safeObserver = new SafeObserver(<Observer<Input>>{
         next: next,
-        complete: complete ? complete : ()=>console.log('complete')
+        // complete: complete ? complete : ()=>console.log('complete')
+        complete: complete ? complete : ()=>{}
       });
     safeObserver.unsub = this._subscribe(safeObserver);
     return safeObserver.unsubscribe.bind(safeObserver);

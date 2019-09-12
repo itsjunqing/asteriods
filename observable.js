@@ -33,7 +33,7 @@ class Observable {
     subscribe(next, complete) {
         const safeObserver = new SafeObserver({
             next: next,
-            complete: complete ? complete : () => console.log('complete')
+            complete: complete ? complete : () => { }
         });
         safeObserver.unsub = this._subscribe(safeObserver);
         return safeObserver.unsubscribe.bind(safeObserver);

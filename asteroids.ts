@@ -15,15 +15,10 @@ const degToRad = (deg: number) =>
 
 /**
  * Returns a CSS Matrix of the transform attribute of the element
+ * Inspired by Nicholas Wong (Malaysia tutor)
  */
 const transformMatrix = 
   (e:Elem) => new WebKitCSSMatrix(window.getComputedStyle(e.elem).webkitTransform);
-
-/**
- * Returns the distance between two coordinates
- */
-const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) : number => 
-  Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));   
 
 /**
  * Gets a random integer number within the bounded size (inclusive of max and min value itself)
@@ -32,11 +27,20 @@ const getRandomInt = (min: number, max: number) : number =>
   Math.floor(Math.random() * (max - min + 1) + min);
 
 /**
- * Returns a new coordinate of x and y after moving the old coordinates
+ * A pure function that returns the distance between two coordinates
+ */
+const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) : number => 
+  Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));   
+
+/**
+ * A pure function that returns a new coordinate of x and y after moving the old coordinates
  */
 const getMovement = (x: number, y: number, value: number, angle: number) => 
   ({x: x + value * Math.sin(degToRad(angle)), y: y - value * Math.cos(degToRad(angle))})
 
+/**
+ * A pure function that returns the wrapped value of the element based on the offsets given
+ */
 const getWrapValue = (x: number, y: number, offset: number, svg: HTMLElement) => 
   ({x: x < -offset? svg.clientWidth + offset : x > svg.clientWidth + offset? -offset : x, 
     y: y < -offset? svg.clientHeight + offset : y > svg.clientHeight + offset? -offset : y})
@@ -46,20 +50,26 @@ const getWrapValue = (x: number, y: number, offset: number, svg: HTMLElement) =>
  * Inspired by https://stackoverflow.com/questions/8270612/get-element-moz-transformrotate-value-in-jquery
  */
 function getRotationDegrees(obj: JQuery) {
-    let matrix = obj.css("-webkit-transform") ||
-    obj.css("-moz-transform")    ||
-    obj.css("-ms-transform")     ||
-    obj.css("-o-transform")      ||
-    obj.css("transform");
-    const values : string[] = matrix.split('(')[1].split(')')[0].split(','),
-            a : number= Number(values[0]),
-            b : number = Number(values[1]);
-    let angle : number = Math.round(Math.atan2(b, a) * (180/Math.PI));
-    return angle;
+  const matrix = obj.css("-webkit-transform") ||
+                  obj.css("-moz-transform")    ||
+                  obj.css("-ms-transform")     ||
+                  obj.css("-o-transform")      ||
+                  obj.css("transform");
+  const values : string[] = matrix.split('(')[1].split(')')[0].split(','),
+        a : number= Number(values[0]),
+        b : number = Number(values[1]);
+  const angle : number = Math.round(Math.atan2(b, a) * (180/Math.PI));
+  
+  
+  return angle;
 }
 
-//ok?
-function getRandomRockPosition() {
+/**
+ * An impure function to generate x and y value within a specific range.
+ * This is a design choice because I want to ensure that the asteriod's initial position is not at the centre, because there is a possibility where asteriod could be generated at the center and collide with the rocket immediately.
+ * So I used an impure to create valid values which won't collide with rocket at the start.
+ */
+function getRandomPosition() {
   let y = getRandomInt(1, 599),
       x;
   if (y > 150 && y < 450) {
@@ -74,7 +84,11 @@ function getRandomRockPosition() {
   return {x, y}
 }
 
-
+/**
+ * A impure function that determines if collision happens between a bullet and an asteriod.
+ * It is designed in an impure way because we want to mutate the array of asteriods when collided with a bullet, so that the asteriod and the bullet will be destroyed from the svg map along with the removal from the asteriods array.
+ * At the same time, when collision happens, 3 small asteriods will be generated near the position of the destroyed asteriod and these 3 new small asteriods are added into the asteriods array (to be moved by the observable) 
+ */
 const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, asteriodsGroup: Elem, svg: HTMLElement) => {
   asteriodsBelt
     .filter(asteriodData => {
@@ -96,7 +110,7 @@ const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, 
       bullet.attr("collided", 1);
       asteriodsGroup.elem.removeChild(asteriod.elem);
       asteriodsBelt.splice(asteriodsBelt.indexOf(asteriodData), 1);
-      document.getElementById("score")!.innerText = String(score + radius)
+      document.getElementById("score")!.innerText = String(score + 20 * radius)
       document.getElementById("level")!.innerText = (score + radius) >= (level * 2000)? String(level + 1) : String(level)
       return asteriodData
     })
@@ -165,12 +179,20 @@ function asteroids() {
     // a container to store all asteriods 
     asteriodsGroup = new Elem(svg, "g"),
 
-    // boss = new Elem(svg, "ellipse")
-    //   .attr("cx", 300).attr("cy", 40).attr("rx", 80).attr("ry", 40).attr("fill", "gray").attr("visibility", "hidden"),
+    boss = new Elem(svg, "ellipse")
+      .attr("cx", 300).attr("cy", 40)
+      .attr("rx", 80).attr("ry", 40)
+      .attr("fill", "gray").attr("visibility", "hidden")
+      .attr("id", "boss").attr("health", 30),
 
 
     // Observable that runs for every 10 milliseconds to determine if the game ends
-    endGame = Observable.interval(10).filter(() => document.getElementById("gameover")!.getAttribute("visibility") == "visible"),
+    endGame = Observable.interval(10)
+      .filter(() => document.getElementById("gameover")!.getAttribute("visibility") == "visible")
+      .map(() => {
+        $("#rocket").remove()
+        $("#boss").remove()
+        }),
 
     // Observables that fires when it observes a keydown or keyup is pressed and stop streaming values when the game ends
     keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown").takeUntil(endGame),
@@ -180,10 +202,9 @@ function asteroids() {
     ship = keyDown.map(key => ({
       x: transformMatrix(g).m41,
       y: transformMatrix(g).m42,
-      angle: getRotationDegrees($('#canvas #ship')),
+      angle: getRotationDegrees($('#canvas #rocket')),
       key: key
     }))
-
 
 
   // rotates the ship to the left by transforming to a new angle, reusing the ship observable
@@ -194,7 +215,31 @@ function asteroids() {
   ship.filter(({key}) => key.code == "ArrowRight")
     .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
   
-  
+
+  const killBoss = (bullet: Elem, boss: Elem) => {
+
+  }
+
+  const distanceEllipse = (x: number, y: number, ellipse: Elem) => {
+    return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
+      (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2))
+  }
+
+  Observable.interval(100).filter(() => parseInt(document.getElementById("level")!.innerText) >= 2)
+    .map(() => {
+      boss.attr("visibility", "visible")
+    })
+    .takeUntil(endGame)
+    .filter(() => document.getElementById("boss")! != null)
+    .subscribe(() => {
+      const bossX = parseInt(boss.attr("cx")),
+            bossY = parseInt(boss.attr("cy")),
+            x = transformMatrix(g).m41,
+            y = transformMatrix(g).m42,
+            angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360,
+            point = getMovement(bossX, bossY, 2, angle)
+      boss.attr("cx", point.x).attr("cy", point.y)
+    })
   
   const speedController = () => {
     let speed = 0, multipler = 0.2
@@ -219,20 +264,20 @@ function asteroids() {
   }
 
   let shipController = speedController();
-  let afdsa = Observable.interval(10)
-    .map(() => {
-      const x = transformMatrix(g).m41,
-            y = transformMatrix(g).m42,
-            angle = getRotationDegrees($('#canvas #ship'))
-      return {x, y, angle}
-    })
-    .subscribe(({x, y, angle})=> {
-      shipController.deccelerate();
-      console.log(shipController.getSpeed());
-      const movement = getMovement(x, y, shipController.getSpeed(), angle),
-            coordinate = getWrapValue(movement.x, movement.y, 0, svg)
-      g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
-    })
+  // let afdsa = Observable.interval(10)
+  //   .map(() => {
+  //     const x = transformMatrix(g).m41,
+  //           y = transformMatrix(g).m42,
+  //           angle = getRotationDegrees($('#canvas #ship'))
+  //     return {x, y, angle}
+  //   })
+  //   .subscribe(({x, y, angle})=> {
+  //     shipController.deccelerate();
+  //     console.log(shipController.getSpeed());
+  //     const movement = getMovement(x, y, shipController.getSpeed(), angle),
+  //           coordinate = getWrapValue(movement.x, movement.y, 0, svg)
+  //     g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+  //   })
 
 
   ship.filter(({key}) => key.code == "ArrowUp")
@@ -271,16 +316,16 @@ function asteroids() {
   //     shipController.reset();
   //   })
 
-  // ship.filter(({key}) => key.code == "ArrowUp")
-  //   .subscribe(({x, y, angle}) => {
-  //     const movement = getMovement(x, y, shipController.getSpeed(), angle), 
-  //           coordinate = getWrapValue(movement.x, movement.y, 0, svg)
+  ship.filter(({key}) => key.code == "ArrowUp")
+    .subscribe(({x, y, angle}) => {
+      const movement = getMovement(x, y, shipController.getSpeed(), angle), 
+            coordinate = getWrapValue(movement.x, movement.y, 0, svg)
 
-  //     g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+      g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
       
-  //     shipController.accelerate();
-  //     console.log(shipController.getSpeed());
-  //   })
+      shipController.accelerate();
+      // console.log(shipController.getSpeed());
+    })
 
 
   /**
@@ -304,19 +349,47 @@ function asteroids() {
    * This bullet will be deleted after 1 second  if it did not collide with any asterids, so filter is used to determine the collision after 1 second.
    * At each bullet's new position, the bullet is passed to a collisionDetection function if the bullet collides with any asteriods
    */
-  constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
+  const kk = constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
       .takeUntil(Observable.interval(1000)
         .filter(() => parseInt(bullet.attr("collided")) == 0)
         .map(() => svg.removeChild(bullet.elem)))
       .map(() => ({bullet, angle})))
     .filter(({bullet}) => parseInt(bullet.attr("collided")) == 0)
-    .subscribe(({bullet, angle}) => {
+    .map(({bullet, angle}) => {
       const coordinate = getMovement(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), 5, angle);
       bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
       collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
       parseInt(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
-    })  
+      return {bullet}
+    })
 
+  kk.subscribe(() => {})
+
+  const aa = kk.filter(({bullet}) => {
+     console.log("runnig filter"); 
+     return parseInt(bullet.attr("collided")) == 0
+  })
+    .filter(({bullet}) => distanceEllipse(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), boss) <= 1)
+
+  aa.filter(() => {
+    console.log("running seocnd filter");
+    return parseInt(boss.attr("health")) == 1
+  })
+    .subscribe(({bullet}) => {
+      console.log("run health == 1");
+      console.log("health =" + boss.attr("health"));
+      boss.attr("health", parseInt(boss.attr("health")) - 1)
+      svg.removeChild(bullet.elem)
+      svg.removeChild(boss.elem)
+    })
+
+  aa.filter(() => parseInt(boss.attr("health")) > 1)
+    .subscribe(({bullet}) => {
+      console.log("run health > 1");
+      console.log("health =" + boss.attr("health"));
+      boss.attr("health", parseInt(boss.attr("health")) - 1)
+      svg.removeChild(bullet.elem)
+    })
   
 
 
@@ -325,10 +398,11 @@ function asteroids() {
    * The new asteriod generated will be added into an array of asteriods so that we can move all asteriods at once in a new observable.
    * This observable will stop streaming (stop generating) the values when the game ends.
    */
-  Observable.interval(10)  
-    .takeUntil(endGame)
+  Observable.interval(1000)  
+    // .takeUntil(endGame)
+    .takeUntil(Observable.interval(3000))
     .subscribe(() => {
-      const asteriodPosition = getRandomRockPosition(),
+      const asteriodPosition = getRandomPosition(),
             asteriod = new Elem(svg, "circle", asteriodsGroup.elem)
               .attr("cx", asteriodPosition.x)
               .attr("cy", asteriodPosition.y)
@@ -342,7 +416,9 @@ function asteroids() {
   /**
    * An observable that moves all the asteriods that exist in the map every 100 milliseconds. 
    * The array of asteriods is flatmapped with the interval observable so that the observable is able to stream all asteriods that exist in the map, and move them accordingly.
-   * The speed in which the asteriods move depeneds on the game's level, so higher level will move the asteriods faster.
+   * This observable has two parts: 
+   * 1) move the asteriods where the speed depends on the game's level, so higher level will move the asteriods faster.
+   * 2) filtering if any of the asteriods collide with the rocket and reset the gameplay 
    */
    Observable.interval(100)
     .takeUntil(endGame)
@@ -352,28 +428,26 @@ function asteroids() {
             angle = asteriodData[1], 
             radius = parseInt(asteriod.attr("r")), 
             level = parseInt(document.getElementById("level")!.innerText),
-            point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 1 * level, angle),
+            point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 3 * level, angle),
             coordinate = getWrapValue(point.x, point.y, radius, svg)
 
       asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y)
     })
-    .filter(asteriodData => {
-      const asteriodX = parseInt(asteriodData[0].attr("cx")),
-            asteriodY = parseInt(asteriodData[0].attr("cy")),
-            radius = parseInt(asteriodData[0].attr("r")),
-            x = transformMatrix(g).m41,
-            y = transformMatrix(g).m42
-      return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
-    })
-    .subscribe(() => {
-      const lives = Number(document.getElementById("lives")!.innerText)
-      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
-      resetGame();
-      if (lives == 0) {
-         document.getElementById("gameover")!.setAttribute("visibility", "visible")
-         svg.removeChild(g.elem)
-       } 
-    })
+    // .subscribe()
+    // .filter(asteriodData => {
+    //   const asteriodX = parseInt(asteriodData[0].attr("cx")),
+    //         asteriodY = parseInt(asteriodData[0].attr("cy")),
+    //         radius = parseInt(asteriodData[0].attr("r")),
+    //         x = transformMatrix(g).m41,
+    //         y = transformMatrix(g).m42
+    //   return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
+    // })
+    // .subscribe(() => {
+    //   const lives = parseInt(document.getElementById("lives")!.innerText)
+    //   resetGame();
+    //   document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+    //   lives == 0? document.getElementById("gameover")!.setAttribute("visibility", "visible") : null;
+    // })
 
 
 
