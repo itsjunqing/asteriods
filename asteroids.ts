@@ -32,6 +32,10 @@ const getRandomInt = (min: number, max: number) : number =>
 const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) : number => 
   Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));   
 
+const distanceEllipse = (x: number, y: number, ellipse: Elem) => {
+  return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
+    (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2))
+}
 /**
  * A pure function that returns a new coordinate of x and y after moving the old coordinates
  */
@@ -151,6 +155,7 @@ const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, 
   }
 
 
+
 function asteroids() {
   // an impure array to keep track of the available asteriods in the map, it is a design choice so that we can mutate the position of the asteriods around the map
   let asteriodsBelt: [Elem, number][] = []
@@ -192,7 +197,7 @@ function asteroids() {
       .map(() => {
         $("#rocket").remove()
         $("#boss").remove()
-        }),
+       }),
 
     // Observables that fires when it observes a keydown or keyup is pressed and stop streaming values when the game ends
     keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown").takeUntil(endGame),
@@ -216,14 +221,7 @@ function asteroids() {
     .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
   
 
-  const killBoss = (bullet: Elem, boss: Elem) => {
-
-  }
-
-  const distanceEllipse = (x: number, y: number, ellipse: Elem) => {
-    return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
-      (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2))
-  }
+  
 
   Observable.interval(100).filter(() => parseInt(document.getElementById("level")!.innerText) >= 2)
     .map(() => {
@@ -241,6 +239,30 @@ function asteroids() {
       boss.attr("cx", point.x).attr("cy", point.y)
     })
   
+  const createBomb = ship.filter(({key}) => key.code == "KeyB")
+    .map(({x, y}) => {
+      const bomb = new Elem(svg, "circle")
+        .attr("cx", x)
+        .attr("cy", y)
+        .attr("r", 10)
+        .attr("id", "bomb")
+        .attr("fill", "Crimson")
+      return {bomb}
+    })
+    .flatMap(({bomb}) => Observable.interval(100)
+      .takeUntil(Observable.interval(5000)
+        .filter(() => document.contains(bomb.elem))
+        .map(() => svg.removeChild(bomb.elem)))
+      .map(() => ({bomb})))
+      .filter(({bomb}) => distanceBetweenPoints(parseInt(bomb.attr("cx")), parseInt(bomb.attr("cy")), parseInt(boss.attr("cx")), parseInt(boss.attr("cy"))) < 50)
+      .subscribe(({bomb}) => {
+        const hp = parseInt(boss.attr("health"))
+        console.log(hp);
+        boss.attr("health", hp > 1? hp -1: 0)
+        parseInt(boss.attr("health")) == 0? svg.removeChild(boss.elem) : null
+        document.contains(bomb.elem)? svg.removeChild(bomb.elem) : null
+      })
+
   const speedController = () => {
     let speed = 0, multipler = 0.2
     return {
@@ -355,7 +377,7 @@ function asteroids() {
         .map(() => svg.removeChild(bullet.elem)))
       .map(() => ({bullet, angle})))
     .filter(({bullet}) => parseInt(bullet.attr("collided")) == 0)
-    .map(({bullet, angle}) => {
+    .subscribe(({bullet, angle}) => {
       const coordinate = getMovement(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), 5, angle);
       bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
       collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
@@ -363,33 +385,6 @@ function asteroids() {
       return {bullet}
     })
 
-  kk.subscribe(() => {})
-
-  const aa = kk.filter(({bullet}) => {
-     console.log("runnig filter"); 
-     return parseInt(bullet.attr("collided")) == 0
-  })
-    .filter(({bullet}) => distanceEllipse(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), boss) <= 1)
-
-  aa.filter(() => {
-    console.log("running seocnd filter");
-    return parseInt(boss.attr("health")) == 1
-  })
-    .subscribe(({bullet}) => {
-      console.log("run health == 1");
-      console.log("health =" + boss.attr("health"));
-      boss.attr("health", parseInt(boss.attr("health")) - 1)
-      svg.removeChild(bullet.elem)
-      svg.removeChild(boss.elem)
-    })
-
-  aa.filter(() => parseInt(boss.attr("health")) > 1)
-    .subscribe(({bullet}) => {
-      console.log("run health > 1");
-      console.log("health =" + boss.attr("health"));
-      boss.attr("health", parseInt(boss.attr("health")) - 1)
-      svg.removeChild(bullet.elem)
-    })
   
 
 

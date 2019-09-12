@@ -4,6 +4,10 @@ const degToRad = (deg) => deg * Math.PI / 180;
 const transformMatrix = (e) => new WebKitCSSMatrix(window.getComputedStyle(e.elem).webkitTransform);
 const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const distanceBetweenPoints = (x1, y1, x2, y2) => Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+const distanceEllipse = (x, y, ellipse) => {
+    return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
+        (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2));
+};
 const getMovement = (x, y, value, angle) => ({ x: x + value * Math.sin(degToRad(angle)), y: y - value * Math.cos(degToRad(angle)) });
 const getWrapValue = (x, y, offset, svg) => ({ x: x < -offset ? svg.clientWidth + offset : x > svg.clientWidth + offset ? -offset : x,
     y: y < -offset ? svg.clientHeight + offset : y > svg.clientHeight + offset ? -offset : y });
@@ -97,12 +101,6 @@ function asteroids() {
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle - 10) % 360) + ")"); });
     ship.filter(({ key }) => key.code == "ArrowRight")
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle + 10) % 360) + ")"); });
-    const killBoss = (bullet, boss) => {
-    };
-    const distanceEllipse = (x, y, ellipse) => {
-        return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
-            (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2));
-    };
     Observable.interval(100).filter(() => parseInt(document.getElementById("level").innerText) >= 2)
         .map(() => {
         boss.attr("visibility", "visible");
@@ -112,6 +110,29 @@ function asteroids() {
         .subscribe(() => {
         const bossX = parseInt(boss.attr("cx")), bossY = parseInt(boss.attr("cy")), x = transformMatrix(g).m41, y = transformMatrix(g).m42, angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360, point = getMovement(bossX, bossY, 2, angle);
         boss.attr("cx", point.x).attr("cy", point.y);
+    });
+    const createBomb = ship.filter(({ key }) => key.code == "KeyB")
+        .map(({ x, y }) => {
+        const bomb = new Elem(svg, "circle")
+            .attr("cx", x)
+            .attr("cy", y)
+            .attr("r", 10)
+            .attr("id", "bomb")
+            .attr("fill", "Crimson");
+        return { bomb };
+    })
+        .flatMap(({ bomb }) => Observable.interval(100)
+        .takeUntil(Observable.interval(5000)
+        .filter(() => document.contains(bomb.elem))
+        .map(() => svg.removeChild(bomb.elem)))
+        .map(() => ({ bomb })))
+        .filter(({ bomb }) => distanceBetweenPoints(parseInt(bomb.attr("cx")), parseInt(bomb.attr("cy")), parseInt(boss.attr("cx")), parseInt(boss.attr("cy"))) < 50)
+        .subscribe(({ bomb }) => {
+        const hp = parseInt(boss.attr("health"));
+        console.log(hp);
+        boss.attr("health", hp > 1 ? hp - 1 : 0);
+        parseInt(boss.attr("health")) == 0 ? svg.removeChild(boss.elem) : null;
+        document.contains(bomb.elem) ? svg.removeChild(bomb.elem) : null;
     });
     const speedController = () => {
         let speed = 0, multipler = 0.2;
@@ -155,36 +176,12 @@ function asteroids() {
         .map(() => svg.removeChild(bullet.elem)))
         .map(() => ({ bullet, angle })))
         .filter(({ bullet }) => parseInt(bullet.attr("collided")) == 0)
-        .map(({ bullet, angle }) => {
+        .subscribe(({ bullet, angle }) => {
         const coordinate = getMovement(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), 5, angle);
         bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
         collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
         parseInt(bullet.attr("collided")) == 1 ? svg.removeChild(bullet.elem) : null;
         return { bullet };
-    });
-    kk.subscribe(() => { });
-    const aa = kk.filter(({ bullet }) => {
-        console.log("runnig filter");
-        return parseInt(bullet.attr("collided")) == 0;
-    })
-        .filter(({ bullet }) => distanceEllipse(parseInt(bullet.attr("cx")), parseInt(bullet.attr("cy")), boss) <= 1);
-    aa.filter(() => {
-        console.log("running seocnd filter");
-        return parseInt(boss.attr("health")) == 1;
-    })
-        .subscribe(({ bullet }) => {
-        console.log("run health == 1");
-        console.log("health =" + boss.attr("health"));
-        boss.attr("health", parseInt(boss.attr("health")) - 1);
-        svg.removeChild(bullet.elem);
-        svg.removeChild(boss.elem);
-    });
-    aa.filter(() => parseInt(boss.attr("health")) > 1)
-        .subscribe(({ bullet }) => {
-        console.log("run health > 1");
-        console.log("health =" + boss.attr("health"));
-        boss.attr("health", parseInt(boss.attr("health")) - 1);
-        svg.removeChild(bullet.elem);
     });
     Observable.interval(1000)
         .takeUntil(Observable.interval(3000))
