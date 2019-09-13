@@ -115,7 +115,7 @@ const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, 
       asteriodsGroup.elem.removeChild(asteriod.elem);
       asteriodsBelt.splice(asteriodsBelt.indexOf(asteriodData), 1);
       document.getElementById("score")!.innerText = String(score + 20 * radius)
-      document.getElementById("level")!.innerText = (score + radius) >= (level * 2000)? String(level + 1) : String(level)
+      document.getElementById("level")!.innerText = (score + radius) >= (level * 1000)? String(level + 1) : String(level)
       return asteriodData
     })
 
@@ -154,7 +154,21 @@ const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, 
     })   
   }
 
-
+const controller = () => {
+    let speed = 0, multipler = 1
+    return {
+      accelerate: () => {
+        speed = speed < 40? parseFloat((speed + multipler).toFixed(1)): speed
+        multipler = speed < 40? parseFloat((multipler + 0.2).toFixed(1)) : multipler
+      },
+      deccelerate: () => {
+        speed = speed > 0? parseFloat((speed - multipler).toFixed(1)): 0
+        multipler = speed > 0.2? parseFloat((multipler - 0.2).toFixed(1)) : 1
+      },
+      getSpeed: () => speed,
+      
+    }
+  }
 
 function asteroids() {
   // an impure array to keep track of the available asteriods in the map, it is a design choice so that we can mutate the position of the asteriods around the map
@@ -163,7 +177,7 @@ function asteroids() {
   const 
     // a resetGame function that resets the game to the starting point without changing the player's score by removing all asteriods in the map resets the rocket's position to the center
     resetGame = () => {
-      $(asteriodsGroup.elem).empty()
+      $("#asteriods").empty()
       asteriodsBelt.length = 0;
       g.attr("transform", "translate(300 300) rotate(0)")
     },
@@ -182,7 +196,8 @@ function asteroids() {
       .attr("style","fill:black; stroke:white; stroke-width:1"),
 
     // a container to store all asteriods 
-    asteriodsGroup = new Elem(svg, "g"),
+    asteriodsGroup = new Elem(svg, "g")
+      .attr("id", "asteriods"),
 
     boss = new Elem(svg, "ellipse")
       .attr("cx", 300).attr("cy", 40)
@@ -193,11 +208,15 @@ function asteroids() {
 
     // Observable that runs for every 10 milliseconds to determine if the game ends
     endGame = Observable.interval(10)
-      .filter(() => document.getElementById("gameover")!.getAttribute("visibility") == "visible")
+      .filter(() =>  document.getElementById("lives")!.innerText == "0")
       .map(() => {
+        document.getElementById("gameover")!.setAttribute("visibility", "visible")
         $("#rocket").remove()
         $("#boss").remove()
        }),
+
+    // A main game controller that fires every 100 milliseconds until end of game, this observable stops streaming values when game ends. This observable will be filtered in different states each for a different case, achieving reusability observables
+    gameController = Observable.interval(100).takeUntil(endGame),
 
     // Observables that fires when it observes a keydown or keyup is pressed and stop streaming values when the game ends
     keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown").takeUntil(endGame),
@@ -209,7 +228,17 @@ function asteroids() {
       y: transformMatrix(g).m42,
       angle: getRotationDegrees($('#canvas #rocket')),
       key: key
-    }))
+    })),
+
+    movementController = Observable.interval(50)
+      .takeUntil(endGame)
+      .map(() => ({
+        x: transformMatrix(g).m41,
+        y: transformMatrix(g).m42,
+        angle: getRotationDegrees($("#canvas #rocket"))
+      })),
+
+    speedController = controller()
 
 
   // rotates the ship to the left by transforming to a new angle, reusing the ship observable
@@ -220,134 +249,22 @@ function asteroids() {
   ship.filter(({key}) => key.code == "ArrowRight")
     .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
   
+  // increases the rocket speed via the controller
+  keyDown.filter(({code}) => code == "ArrowUp")
+    .subscribe(() => speedController.accelerate())
 
-  
-
-  Observable.interval(100).filter(() => parseInt(document.getElementById("level")!.innerText) >= 2)
-    .map(() => {
-      boss.attr("visibility", "visible")
-    })
-    .takeUntil(endGame)
-    .filter(() => document.getElementById("boss")! != null)
-    .subscribe(() => {
-      const bossX = parseInt(boss.attr("cx")),
-            bossY = parseInt(boss.attr("cy")),
-            x = transformMatrix(g).m41,
-            y = transformMatrix(g).m42,
-            angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360,
-            point = getMovement(bossX, bossY, 2, angle)
-      boss.attr("cx", point.x).attr("cy", point.y)
-    })
-  
-  const createBomb = ship.filter(({key}) => key.code == "KeyB")
-    .map(({x, y}) => {
-      const bomb = new Elem(svg, "circle")
-        .attr("cx", x)
-        .attr("cy", y)
-        .attr("r", 10)
-        .attr("id", "bomb")
-        .attr("fill", "Crimson")
-      return {bomb}
-    })
-    .flatMap(({bomb}) => Observable.interval(100)
-      .takeUntil(Observable.interval(5000)
-        .filter(() => document.contains(bomb.elem))
-        .map(() => svg.removeChild(bomb.elem)))
-      .map(() => ({bomb})))
-      .filter(({bomb}) => distanceBetweenPoints(parseInt(bomb.attr("cx")), parseInt(bomb.attr("cy")), parseInt(boss.attr("cx")), parseInt(boss.attr("cy"))) < 50)
-      .subscribe(({bomb}) => {
-        const hp = parseInt(boss.attr("health"))
-        console.log(hp);
-        boss.attr("health", hp > 1? hp -1: 0)
-        parseInt(boss.attr("health")) == 0? svg.removeChild(boss.elem) : null
-        document.contains(bomb.elem)? svg.removeChild(bomb.elem) : null
-      })
-
-  const speedController = () => {
-    let speed = 0, multipler = 0.2
-    return {
-      accelerate: () => {
-        speed = speed < 8? parseFloat((speed + multipler).toFixed(1)): speed
-        // console.log("accelrtea speed = " + speed);
-        multipler = speed < 8? parseFloat((multipler + 0.2).toFixed(1)) : multipler
-        // console.log("multiplier = " + multipler);
-      },
-      deccelerate: () => {
-        speed = speed > 0? parseFloat((speed - 0.1).toFixed(1)): 0
-        multipler = speed > 0? multipler - 0.001 : multipler
-        // console.log("decleerate speed = " + speed);
-      },
-      getSpeed: () => speed,
-
-      reset: () => {
-        speed = 5
-      }
-    }
-  }
-
-  let shipController = speedController();
-  // let afdsa = Observable.interval(10)
-  //   .map(() => {
-  //     const x = transformMatrix(g).m41,
-  //           y = transformMatrix(g).m42,
-  //           angle = getRotationDegrees($('#canvas #ship'))
-  //     return {x, y, angle}
-  //   })
-  //   .subscribe(({x, y, angle})=> {
-  //     shipController.deccelerate();
-  //     console.log(shipController.getSpeed());
-  //     const movement = getMovement(x, y, shipController.getSpeed(), angle),
-  //           coordinate = getWrapValue(movement.x, movement.y, 0, svg)
-  //     g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
-  //   })
+  // decreases the rocket speed via the controller
+  keyDown.filter(({code}) => code == "ArrowDown")
+    .subscribe(() => speedController.deccelerate())
 
 
-  ship.filter(({key}) => key.code == "ArrowUp")
-    .subscribe(() => shipController.accelerate())
-
-
-
-
-
-  // keyUp.filter(({code}) => code == "ArrowUp")
-  //   .flatMap(() => ship)
-  //   .map(({x, y, angle}) => {
-  //     Observable.interval(10).takeUntil(Observable.interval(2000))
-  //     .map(() => {
-  //       const movement = getMovement(x, y, shipController.getSpeed(), angle),
-  //             coordinate = getWrapValue(movement.x, movement.y, 0)
-  //       g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
-  //       shipController.decelerate();
-  //     })
-  //     .subscribe(() => {})
-  //   })
-  //   .subscribe(() => {})
-    // .flatMap(({x, y, angle}) => Observable.interval(10).takeUntil(Observable.interval(2000))
-    //   .map(() => {
-    //     const movement = getMovement(x, y, shipController.getSpeed(), angle),
-    //         coordinate = getWrapValue(movement.x, movement.y, 0)        
-    //     shipController.decelerate()
-    //     return {x: coordinate.x, y: coordinate.y, angle}
-    //   }))
-    // .subscribe(({x, y, angle}) => {
-    //   g.attr("transform", "translate("+x+" "+y+") rotate("+angle+")")
-    // })
-
-  // keyUp.filter(key => key.code == "ArrowUp")
-  //   .subscribe(() => {
-  //     shipController.reset();
-  //   })
-
-  ship.filter(({key}) => key.code == "ArrowUp")
-    .subscribe(({x, y, angle}) => {
-      const movement = getMovement(x, y, shipController.getSpeed(), angle), 
-            coordinate = getWrapValue(movement.x, movement.y, 0, svg)
-
-      g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
-      
-      shipController.accelerate();
-      // console.log(shipController.getSpeed());
-    })
+  // continuously moves the rocket which based on the controller's speed
+  movementController.subscribe(({x, y, angle}) => {
+    console.log(speedController.getSpeed());
+    const movement = getMovement(x, y, speedController.getSpeed(), angle),
+          coordinate = getWrapValue(movement.x, movement.y, 0, svg)
+    g.attr("transform", "translate("+coordinate.x+" "+coordinate.y+") rotate("+angle+")")
+  })
 
 
   /**
@@ -367,11 +284,11 @@ function asteroids() {
 
 
   /**
-   * This observable will move the bullet generated every 10 milliseconds and stop moving it after 1 second. 
-   * This bullet will be deleted after 1 second  if it did not collide with any asterids, so filter is used to determine the collision after 1 second.
-   * At each bullet's new position, the bullet is passed to a collisionDetection function if the bullet collides with any asteriods
+   * Moves the bullet generated every 10 milliseconds and stop moving it after 1 second. 
+   * If bullet is not collided, if will stop stream its values, otherwise, it will continuously move until 1 second is reached
+   * At each position of bullet, the bullet is passed to an impure collisionDetection function to determine if the bullet collides with any asteroids. If collided, the bullet will be removed 
    */
-  const kk = constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
+  constructBullets.flatMap(({bullet, angle}) => Observable.interval(10)
       .takeUntil(Observable.interval(1000)
         .filter(() => parseInt(bullet.attr("collided")) == 0)
         .map(() => svg.removeChild(bullet.elem)))
@@ -382,20 +299,87 @@ function asteroids() {
       bullet.attr("cx", coordinate.x).attr("cy", coordinate.y);
       collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
       parseInt(bullet.attr("collided")) == 1? svg.removeChild(bullet.elem) : null
-      return {bullet}
     })
+
+  // gameController.filter(() => {
+  //     const score = parseInt(document.getElementById("score")!.innerText),
+  //           level = parseInt(document.getElementById("level")!.innerText)
+  //     return score >= (level * 1000)
+  //   })
+  //   .subscribe(() => document.getElementById("level")!.innerText = String(Number($("#level")) + 1 ))
+
+  gameController.filter(() => parseInt(document.getElementById("level")!.innerText) >= 3)
+    .map(() => {
+      boss.attr("visibility", "visible")
+      $("#bossHP").removeAttr("hidden")
+    })
+    .takeUntil(endGame)
+    .filter(() => document.getElementById("boss")! != null)
+    .subscribe(() => {
+      const bossX = parseInt(boss.attr("cx")),
+            bossY = parseInt(boss.attr("cy")),
+            x = transformMatrix(g).m41,
+            y = transformMatrix(g).m42,
+            angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360,
+            point = getMovement(bossX, bossY, 2, angle)
+      boss.attr("cx", point.x).attr("cy", point.y)
+      return {bossX: point.x, bossY: point.y}
+    })
+
+  gameController.filter(() => boss.attr("visibility") == "visible")
+    .filter(() => distanceEllipse(transformMatrix(g).m41, transformMatrix(g).m42, boss) <= 1)
+    .subscribe(() => {
+      const lives = parseInt(document.getElementById("lives")!.innerText)
+      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+      boss.attr("cx", 300).attr("cy", 40)
+      resetGame();
+    })
+
+
+  gameController.filter(() => document.contains(boss.elem))
+    .filter(() => parseInt(boss.attr("health")) == 0)
+    .subscribe(() => {
+       svg.removeChild(boss.elem)
+       $("#destroyed").removeAttr("hidden")  
+    })
+
+
+  ship.filter(({key}) => key.code == "KeyB")
+    .map(({x, y}) => {
+      const bomb = new Elem(svg, "circle")
+        .attr("cx", x)
+        .attr("cy", y)
+        .attr("r", 10)
+        .attr("id", "bomb")
+        .attr("fill", "lime")
+      return {bomb}
+    })
+    .flatMap(({bomb}) => Observable.interval(100)
+        .takeUntil(Observable.interval(10000)
+          .filter(() => document.contains(bomb.elem))
+          .map(() => svg.removeChild(bomb.elem)))
+        .map(() => ({bomb})))
+    .filter(({bomb}) => document.contains(bomb.elem))
+    .filter(({bomb}) => distanceEllipse(parseInt(bomb.attr("cx")), parseInt(bomb.attr("cy")), boss) <= 1)
+    .subscribe(({bomb}) => {
+      const hp = parseInt(boss.attr("health"))
+      boss.attr("health", hp > 1? hp -1: 0)
+      document.getElementById("hp")!.innerText = boss.attr("health")
+      document.contains(bomb.elem)? svg.removeChild(bomb.elem) : null
+    })
+
+
 
   
 
 
   /**
-   * An observable that will generate a randomly positioned new asteriod for every 2 seconds.
+   * An observable that will generate a randomly positioned new asteriod for every 3 seconds.
    * The new asteriod generated will be added into an array of asteriods so that we can move all asteriods at once in a new observable.
-   * This observable will stop streaming (stop generating) the values when the game ends.
+   * This observable will stop streaming (stop generating) when the game ends.
    */
-  Observable.interval(1000)  
-    // .takeUntil(endGame)
-    .takeUntil(Observable.interval(3000))
+  Observable.interval(3000)  
+    .takeUntil(endGame)
     .subscribe(() => {
       const asteriodPosition = getRandomPosition(),
             asteriod = new Elem(svg, "circle", asteriodsGroup.elem)
@@ -415,35 +399,32 @@ function asteroids() {
    * 1) move the asteriods where the speed depends on the game's level, so higher level will move the asteriods faster.
    * 2) filtering if any of the asteriods collide with the rocket and reset the gameplay 
    */
-   Observable.interval(100)
-    .takeUntil(endGame)
-    .flatMap(() => Observable.fromArray(asteriodsBelt))
-    .forEach(asteriodData => {
+  gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
+    .subscribe(asteriodData => {
       const asteriod = asteriodData[0], 
             angle = asteriodData[1], 
             radius = parseInt(asteriod.attr("r")), 
             level = parseInt(document.getElementById("level")!.innerText),
-            point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 3 * level, angle),
+            point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 2 * level, angle),
             coordinate = getWrapValue(point.x, point.y, radius, svg)
 
       asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y)
     })
-    // .subscribe()
-    // .filter(asteriodData => {
-    //   const asteriodX = parseInt(asteriodData[0].attr("cx")),
-    //         asteriodY = parseInt(asteriodData[0].attr("cy")),
-    //         radius = parseInt(asteriodData[0].attr("r")),
-    //         x = transformMatrix(g).m41,
-    //         y = transformMatrix(g).m42
-    //   return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
-    // })
-    // .subscribe(() => {
-    //   const lives = parseInt(document.getElementById("lives")!.innerText)
-    //   resetGame();
-    //   document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
-    //   lives == 0? document.getElementById("gameover")!.setAttribute("visibility", "visible") : null;
-    // })
 
+  gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
+    .filter(asteriodData => {
+      const asteriodX = parseInt(asteriodData[0].attr("cx")),
+            asteriodY = parseInt(asteriodData[0].attr("cy")),
+            radius = parseInt(asteriodData[0].attr("r")),
+            x = transformMatrix(g).m41,
+            y = transformMatrix(g).m42
+      return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
+    })
+    .subscribe(() => {
+      const lives = parseInt(document.getElementById("lives")!.innerText)
+      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+      resetGame();
+    })
 
 
 }
