@@ -47,8 +47,7 @@ const collisionDetection = (bullet, asteriodsBelt, asteriodsGroup, svg) => {
         bullet.attr("collided", 1);
         asteriodsGroup.elem.removeChild(asteriod.elem);
         asteriodsBelt.splice(asteriodsBelt.indexOf(asteriodData), 1);
-        document.getElementById("score").innerText = String(score + 20 * radius);
-        document.getElementById("level").innerText = (score + radius) >= (level * 1000) ? String(level + 1) : String(level);
+        document.getElementById("score").innerText = String(score + radius);
         return asteriodData;
     })
         .filter(asteriodData => parseInt(asteriodData[0].attr("r")) > 20)
@@ -118,7 +117,26 @@ function asteroids() {
         x: transformMatrix(g).m41,
         y: transformMatrix(g).m42,
         angle: getRotationDegrees($("#canvas #rocket"))
-    })), speedController = controller();
+    })), constructBullets = ship.filter(({ key }) => key.code == "Space")
+        .map(({ x, y, angle }) => {
+        const coordinate = getMovement(x, y, 20, angle), bullet = new Elem(svg, "circle")
+            .attr("cx", coordinate.x)
+            .attr("cy", coordinate.y)
+            .attr("r", 2)
+            .attr("fill", "salmon")
+            .attr("collided", 0);
+        return { bullet, angle };
+    }), constructAsteroids = Observable.interval(3000)
+        .takeUntil(endGame)
+        .subscribe(() => {
+        const asteriodPosition = getRandomPosition(), asteriod = new Elem(svg, "circle", asteriodsGroup.elem)
+            .attr("cx", asteriodPosition.x)
+            .attr("cy", asteriodPosition.y)
+            .attr("r", 40)
+            .attr("fill", "black")
+            .attr("stroke", "orange");
+        asteriodsBelt.push([asteriod, getRandomInt(0, 359)]);
+    }), speedController = controller();
     ship.filter(({ key }) => key.code == "ArrowLeft")
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle - 10) % 360) + ")"); });
     ship.filter(({ key }) => key.code == "ArrowRight")
@@ -128,19 +146,8 @@ function asteroids() {
     keyDown.filter(({ code }) => code == "ArrowDown")
         .subscribe(() => speedController.deccelerate());
     movementController.subscribe(({ x, y, angle }) => {
-        console.log(speedController.getSpeed());
         const movement = getMovement(x, y, speedController.getSpeed(), angle), coordinate = getWrapValue(movement.x, movement.y, 0, svg);
         g.attr("transform", "translate(" + coordinate.x + " " + coordinate.y + ") rotate(" + angle + ")");
-    });
-    const constructBullets = ship.filter(({ key }) => key.code == "Space")
-        .map(({ x, y, angle }) => {
-        const coordinate = getMovement(x, y, 20, angle), bullet = new Elem(svg, "circle")
-            .attr("cx", coordinate.x)
-            .attr("cy", coordinate.y)
-            .attr("r", 2)
-            .attr("fill", "salmon")
-            .attr("collided", 0);
-        return { bullet, angle };
     });
     constructBullets.flatMap(({ bullet, angle }) => Observable.interval(10)
         .takeUntil(Observable.interval(1000)
@@ -154,6 +161,27 @@ function asteroids() {
         collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
         parseInt(bullet.attr("collided")) == 1 ? svg.removeChild(bullet.elem) : null;
     });
+    gameController.map(() => {
+        const score = parseInt(document.getElementById("score").innerText), level = parseInt(document.getElementById("level").innerText);
+        return { score, level };
+    })
+        .filter(({ score, level }) => score >= level * 1000)
+        .subscribe(({ level }) => document.getElementById("level").innerText = String(level + 1));
+    gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
+        .subscribe(asteriodData => {
+        const asteriod = asteriodData[0], angle = asteriodData[1], radius = parseInt(asteriod.attr("r")), level = parseInt(document.getElementById("level").innerText), point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 2 * level, angle), coordinate = getWrapValue(point.x, point.y, radius, svg);
+        asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y);
+    });
+    gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
+        .filter(asteriodData => {
+        const asteriodX = parseInt(asteriodData[0].attr("cx")), asteriodY = parseInt(asteriodData[0].attr("cy")), radius = parseInt(asteriodData[0].attr("r")), x = transformMatrix(g).m41, y = transformMatrix(g).m42;
+        return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius;
+    })
+        .subscribe(() => {
+        const lives = parseInt(document.getElementById("lives").innerText);
+        document.getElementById("lives").innerText = lives > 0 ? String(lives - 1) : String(0);
+        resetGame();
+    });
     gameController.filter(() => parseInt(document.getElementById("level").innerText) >= 3)
         .map(() => {
         boss.attr("visibility", "visible");
@@ -164,7 +192,6 @@ function asteroids() {
         .subscribe(() => {
         const bossX = parseInt(boss.attr("cx")), bossY = parseInt(boss.attr("cy")), x = transformMatrix(g).m41, y = transformMatrix(g).m42, angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360, point = getMovement(bossX, bossY, 2, angle);
         boss.attr("cx", point.x).attr("cy", point.y);
-        return { bossX: point.x, bossY: point.y };
     });
     gameController.filter(() => boss.attr("visibility") == "visible")
         .filter(() => distanceEllipse(transformMatrix(g).m41, transformMatrix(g).m42, boss) <= 1)
@@ -202,32 +229,6 @@ function asteroids() {
         boss.attr("health", hp > 1 ? hp - 1 : 0);
         document.getElementById("hp").innerText = boss.attr("health");
         document.contains(bomb.elem) ? svg.removeChild(bomb.elem) : null;
-    });
-    Observable.interval(3000)
-        .takeUntil(endGame)
-        .subscribe(() => {
-        const asteriodPosition = getRandomPosition(), asteriod = new Elem(svg, "circle", asteriodsGroup.elem)
-            .attr("cx", asteriodPosition.x)
-            .attr("cy", asteriodPosition.y)
-            .attr("r", 40)
-            .attr("fill", "black")
-            .attr("stroke", "orange");
-        asteriodsBelt.push([asteriod, getRandomInt(0, 359)]);
-    });
-    gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
-        .subscribe(asteriodData => {
-        const asteriod = asteriodData[0], angle = asteriodData[1], radius = parseInt(asteriod.attr("r")), level = parseInt(document.getElementById("level").innerText), point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 2 * level, angle), coordinate = getWrapValue(point.x, point.y, radius, svg);
-        asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y);
-    });
-    gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
-        .filter(asteriodData => {
-        const asteriodX = parseInt(asteriodData[0].attr("cx")), asteriodY = parseInt(asteriodData[0].attr("cy")), radius = parseInt(asteriodData[0].attr("r")), x = transformMatrix(g).m41, y = transformMatrix(g).m42;
-        return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius;
-    })
-        .subscribe(() => {
-        const lives = parseInt(document.getElementById("lives").innerText);
-        document.getElementById("lives").innerText = lives > 0 ? String(lives - 1) : String(0);
-        resetGame();
     });
 }
 if (typeof window != 'undefined')
