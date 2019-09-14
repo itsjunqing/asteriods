@@ -16,32 +16,30 @@
         <script src="asteroids.js"></script>
         <script type="text/javascript" src="jquery-3.4.1.min.js"></script>
         <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
-        <!-- <link rel="stylesheet" href="font-awesome.css"> -->
     </head>
     <body>
         <h1>Asteroids</h1>
-        <h2>**Note: To have the best gameplay experience, please zoom out from your browser and ensure that you can view the whole page in one screen (without scrolling), to prevent the browser from scrolling when arrow buttons are pressed.**</h2>
+        <h2>**Note: To have the best gameplay experience, please zoom out from your browser and ensure that you can view the whole page in one screen (without scrolling), to prevent the browser from scrolling when arrow buttons are pressed.** <a href="https://drive.google.com/file/d/1C82C6173BT5Xu5niiehKQEPJMW7T14TA/view?usp=sharing" style="color: red;">Click here for a link to a demo gameplay video</a></h2>
         <hr>
         <div style="color: blue;">
             <h2>Number of Lives: <span id="lives">5</span></h1>
             <h2>Score: <span id="score">0</span> ---------- Level: <span id="level">1</span></h1>
         </div>    
-        <h3 hidden id="bossHP" style="color: royalblue;">Boss Health: <span id="hp">30</span> <span id="destroyed" hidden> >>> BOSS DESTROYED!</span></h3>
-        <div style="display: flex; justify-content: initial;">
+        <h3 hidden id="bossHP" style="color: royalblue;">Boss Health: <span id="hp">10</span> <span id="destroyed" hidden> >>> BOSS IS DESTROYED!</span></h3>
+        <div style="display: flex;">
             <svg id="canvas" width="600" height="600">
                 <text x="60" y="300" font-size="80px" fill="red" visibility="hidden" id="gameover">GAME OVER</text>
             </svg>
-            <div>
-                
+            <div style="margin-left: 30px">
                 <h2>Asteroids Gameplay Introduction</h2>
-                <p>Rocket is given 5 lives. Upon firing each asteroids, player will be awarded with scores,<br> where the scores are based on the destroy of large or small asteroids.<br>Destroying larger asteoids will grant the player higher score and smaller asteroids for lower score.<br>Boosting the scores will increase the player's level.<br>At each increment of level, asteroids will move at a faster rate, so beware of your keys!<br>When level 3 is reached, a boss will be spawned from the top, this boss will follow the rocket at all times.<br>If the rocket collides with the boss or the asteroids, the number of lives will be reduced, and the gameplay will be reset.</p>
+                <p>Rocket is given 5 lives. Upon firing each asteroids, player will be awarded with scores,<br> where the scores are based on the destroy of large or small asteroids.<br>Destroying larger asteroids will grant the player higher score and smaller asteroids for lower score.<br>Higher scores will ultimately lead to higher level.<br>At each increment of level, asteroids will move at a faster rate, so beware of your keys!<br>When level 3 is reached, a boss will be spawned from the top, this boss will follow the rocket at all times.<br>If the rocket collides with the boss or the asteroids, the number of lives will be reduced, and the gameplay will be reset.</p>
                 <p>>> Killing large asteroids with bullets will spawn smaller asteroids and only smaller asteroids can be destroyed fully.</p>
                 <p>>> To detonate a bomb, press the 'B' button and the bomb will be spawned on the location of the rocket.<br>This bomb will exist for 10 seconds before it completely disappears into the air.<br>The bomb will only explode when the enemy boss is nearby, and if it is, the enemy's health will be reduced by 1.<br>When the health reaches zero, the enemy is destroyed</p>
                 <h2>Leveling System</h2>
                 <p>Each level will be increased when the score reaches above 1000 * current level.<br>For instance, when at level 1, level 2 will be achieved when score is 1000 (1000 * 1).<br>At level 2, level 3 will be achieved when score is 2000 (1000 * 2).<br>This leveling system applies for all levels.</p>
                 <h2>How To Play</h2> 
                 <ol>
-                    <li>ArrowUp Key <i class="fas fa-arrow-alt-circle-up"></i>: To move/thrust the rocket forward (beware of speeding, you may collide with asteroid! use ArrowDown to stop moving!)</li>
+                    <li>ArrowUp Key <i class="fas fa-arrow-alt-circle-up"></i>: To move/thrust the rocket forward (BEWARE OF SPEEDING, you may collide with asteroid! use ArrowDown to stop moving!)</li>
                     <li>ArrowDown Key <i class="fas fa-arrow-circle-down"></i>: To stop moving/thrusting the rocket forward (to reduce speed / stop moving)</li>
                     <li>ArrowLeft Key <i class="fas fa-arrow-circle-left"></i>: To rotate to the left</li>
                     <li>ArrowRight Key <i class="fas fa-arrow-circle-right"></i>: To rotate to the right</li>
@@ -51,13 +49,9 @@
                 <h2>How To Kill</h2>
                 <ul>
                     <li>For asteroids: Kill them with bullets by pressing 'Space' key</li>
-                    <li>For enemy boss: Kill them with bombs by pressing 'B' key, which will reduce the enemy's health<br></li>
-                </ul>
-                    
+                    <li>For enemy boss: Kill them with bombs by pressing 'B' key, which will reduce the enemy's health <br>(Hint: the goal is to move around the map, spawn bomb and nudge them to move over the bomb, because the boss will follow you!)<br></li>
+                </ul>               
             </div>
-            
         </div>
-        
-
     </body>
 </html>

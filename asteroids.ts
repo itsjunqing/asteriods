@@ -32,10 +32,13 @@ const getRandomInt = (min: number, max: number) : number =>
 const distanceBetweenPoints = (x1: number, y1: number, x2: number, y2: number) : number => 
   Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));   
 
-const distanceEllipse = (x: number, y: number, ellipse: Elem) => {
-  return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
+/**
+ * A pure function that returns the distance between a given x and y point with an ellipse (aka checking if the point is within the ellipse range)
+ */
+const distanceEllipse = (x: number, y: number, ellipse: Elem) => 
+  (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
     (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2))
-}
+
 /**
  * A pure function that returns a new coordinate of x and y after moving the old coordinates
  */
@@ -48,6 +51,15 @@ const getMovement = (x: number, y: number, value: number, angle: number) =>
 const getWrapValue = (x: number, y: number, offset: number, svg: HTMLElement) => 
   ({x: x < -offset? svg.clientWidth + offset : x > svg.clientWidth + offset? -offset : x, 
     y: y < -offset? svg.clientHeight + offset : y > svg.clientHeight + offset? -offset : y})
+
+/**
+ * A function that generates x and y value within a specific range.
+ */
+const getRandomPosition = () => {
+  const y = getRandomInt(1, 599),
+        x = (y > 150 && y < 450)? getRandomInt(0, 1) == 1? getRandomInt(1, 150) : getRandomInt(450, 599) : getRandomInt(1, 599)
+  return {x, y}
+}
 
 /**
  * Returns the rotation angle of a transformed element using jQuery
@@ -63,29 +75,7 @@ function getRotationDegrees(obj: JQuery) {
         a : number= Number(values[0]),
         b : number = Number(values[1]);
   const angle : number = Math.round(Math.atan2(b, a) * (180/Math.PI));
-  
-  
   return angle;
-}
-
-/**
- * An impure function to generate x and y value within a specific range.
- * This is a design choice because I want to ensure that the asteriod's initial position is not at the centre, because there is a possibility where asteriod could be generated at the center and collide with the rocket immediately.
- * So I used an impure to create valid values which won't collide with rocket at the start.
- */
-function getRandomPosition() {
-  let y = getRandomInt(1, 599),
-      x;
-  if (y > 150 && y < 450) {
-    if (getRandomInt(0, 1)) {
-      x = getRandomInt(1, 150)
-    } else {
-      x = getRandomInt(450, 599)
-    }
-  } else {
-    x = getRandomInt(1, 599);
-  }
-  return {x, y}
 }
 
 /**
@@ -157,6 +147,9 @@ const collisionDetection = (bullet: Elem, asteriodsBelt: Array<[Elem, number]>, 
     })   
   }
 
+/**
+ * A controller function that mutates the speed by returning a closure of three functions. The purpose of having this controller is to allow rocket to thrust/accelerate forward without losing track of the current speed and to reduce the thrust through decelerating - that decreases the speed. This creates an encapsulated boundary over who can mutate the speed. By doing this we get a closure on the speed and mutlipler as they are not accessible from anywhere outside of the closure. With such closure, we can say that the internal functions - accelerate(), deccelerate() and getSpeed() remembers the state of the environment which it was created and able to mutate changes over the speed and multipler.
+ */
 const controller = () => {
     let speed = 0, multipler = 1
     return {
@@ -168,11 +161,14 @@ const controller = () => {
         speed = speed > 0? parseFloat((speed - multipler).toFixed(1)): 0
         multipler = speed > 0.2? parseFloat((multipler - 0.2).toFixed(1)) : 1
       },
-      getSpeed: () => speed,
-      
+      getSpeed: () => speed,    
     }
   }
 
+
+/**
+ * Two major observables are used throughout this code, which are gameController and ship observables. These observables are tiny but useful throughout the code because majority of the side-effects are contained in the subscribe statement. This is because those observables are filtered into different conditional states to operate different things on various level. All state changes happen in the subscribe statement of the subscribe calls the declared observable, achieving reusability style. On top of that, for rocket movement, a function - controller is used to control the speed of the rocket, allowing thrusting to occur. The main reason why a controller is used is to provide a closure (or encapsulated boundary) of the speed of the rocket so that only certain observables are able to mutate the speed, creating greater restriction over mutability. 
+ */
 function asteroids() {
   // an impure array to keep track of the available asteriods in the map, it is a design choice so that we can mutate the position of the asteriods around the map
   let asteriodsBelt: [Elem, number][] = []
@@ -207,8 +203,7 @@ function asteroids() {
       .attr("cx", 300).attr("cy", 40)
       .attr("rx", 80).attr("ry", 40)
       .attr("fill", "gray").attr("visibility", "hidden")
-      .attr("id", "boss").attr("health", 30),
-
+      .attr("id", "boss").attr("health", 10),
 
     // Observable that runs for every 10 milliseconds to determine if the game ends
     endGame = Observable.interval(10)
@@ -217,16 +212,16 @@ function asteroids() {
         document.getElementById("gameover")!.setAttribute("visibility", "visible")
         $("#rocket").remove()
         $("#boss").remove()
-       }),
+      }),
 
-    // A main game controller that fires every 100 milliseconds until end of game, this observable stops streaming values when game ends. This observable will be filtered in different states each for a different case, achieving reusability observables
+    // A main game controller that fires every 100 milliseconds until end of game, this observable stops streaming values when game ends. This observable will be filtered in different states each for a different case. To achieve clean and reusable code, chaining and continuations from this observable is used throughout the code. 
     gameController = Observable.interval(100).takeUntil(endGame),
 
     // Observables that fires when it observes a keydown or keyup is pressed and stop streaming values when the game ends
     keyDown = Observable.fromEvent<KeyboardEvent>(document, "keydown").takeUntil(endGame),
     keyUp = Observable.fromEvent<KeyboardEvent>(document, "keyup").takeUntil(endGame),
 
-
+    // An observable ship that maps the properties of the ship (x, y and angle) when a keydown is pressed
     ship = keyDown.map(key => ({
       x: transformMatrix(g).m41,
       y: transformMatrix(g).m42,
@@ -234,6 +229,7 @@ function asteroids() {
       key: key
     })),
 
+    // An observable that continuously streams the properties - x, y, and angle of the rocket for every 50 milliseconds. The purpose of this is to create the thrust movement so that the rocket is able to thrust forward or stop thrusting.
     movementController = Observable.interval(50)
       .takeUntil(endGame)
       .map(() => ({
@@ -242,10 +238,8 @@ function asteroids() {
         angle: getRotationDegrees($("#canvas #rocket"))
       })),
 
-    /**
-     * Fires a bullet at the peak of the ship when space button is pressed and returns the properties of the generated bullet. 
-     */
-    constructBullets = ship.filter(({key}) => key.code == "Space")
+    // Fires a bullet at the peak of the ship when space button is pressed and returns the properties of the generated bullet. 
+    constructBullets = ship.filter(({key}) => key.keyCode == 32)
       .map(({x, y, angle}) => {
         const coordinate = getMovement(x, y, 20, angle),
               bullet = new Elem(svg, "circle")
@@ -257,9 +251,7 @@ function asteroids() {
         return {bullet, angle};
       }),
 
-    /**
-     * An observable that will generate a randomly positioned new asteroid for every 3 seconds. The new asteroid generated will be added into an array of asteroids so that we can move all asteroids at once in a new observable and will stop streaming values when the game ends.
-     */
+    // An observable that will generate a randomly positioned new asteroid for every 3 seconds. The new asteroid generated will be added into an array of asteroids so that we can move all asteroids at once in a new observable and will stop streaming values when the game ends.
     constructAsteroids = Observable.interval(3000)  
       .takeUntil(endGame)
       .subscribe(() => {
@@ -273,6 +265,7 @@ function asteroids() {
         asteriodsBelt.push([asteriod, getRandomInt(0, 359)]);
       }),
 
+    // a speed controller function, which mutates the speed of the rocket within a closure 
     speedController = controller()
 
 
@@ -282,19 +275,19 @@ function asteroids() {
    */
   
   // rotates the ship to the left by transforming to a new angle, reusing the ship observable
-  ship.filter(({key}) => key.code == "ArrowLeft")
+  ship.filter(({key}) => key.keyCode == 37)
     .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle-10) % 360)+")")})
 
   // rotates the ship to the right by transforming to a new angle, reusing the ship observable  
-  ship.filter(({key}) => key.code == "ArrowRight")
+  ship.filter(({key}) => key.keyCode == 39)
     .subscribe(({x, y, angle}) => {g.attr("transform", "translate("+x+" "+y+") rotate("+((angle+10) % 360)+")")})
   
   // increases the rocket speed via the controller
-  keyDown.filter(({code}) => code == "ArrowUp")
+  ship.filter(({key}) => key.keyCode == 38)
     .subscribe(() => speedController.accelerate())
 
   // decreases the rocket speed via the controller
-  keyDown.filter(({code}) => code == "ArrowDown")
+  ship.filter(({key}) => key.keyCode == 40)
     .subscribe(() => speedController.deccelerate())
 
   // continuously moves the rocket which based on the controller's speed
@@ -327,11 +320,10 @@ function asteroids() {
     })
 
   // Updates the level based on the leveling system, where if the current score >= level * 1000, the level is increased by 1.
-  gameController.map(() => {
-      const score = parseInt(document.getElementById("score")!.innerText),
-            level = parseInt(document.getElementById("level")!.innerText)
-      return {score, level}
-    })
+  gameController.map(() => ({
+      score: parseInt(document.getElementById("score")!.innerText),
+      level: parseInt(document.getElementById("level")!.innerText)
+    }))
     .filter(({score, level}) => score >= level * 1000)
     .subscribe(({level}) => document.getElementById("level")!.innerText = String(level + 1))
 
@@ -350,7 +342,6 @@ function asteroids() {
             level = parseInt(document.getElementById("level")!.innerText),
             point = getMovement(parseInt(asteriod.attr("cx")), parseInt(asteriod.attr("cy")), 2 * level, angle),
             coordinate = getWrapValue(point.x, point.y, radius, svg)
-
       asteriod.attr("cx", coordinate.x).attr("cy", coordinate.y)
     })
 
@@ -362,11 +353,11 @@ function asteroids() {
             radius = parseInt(asteriodData[0].attr("r")),
             x = transformMatrix(g).m41,
             y = transformMatrix(g).m42
-      return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius
+      return distanceBetweenPoints(x, y, asteriodX, asteriodY) <= radius
     })
     .subscribe(() => {
-      const lives = parseInt(document.getElementById("lives")!.innerText)
-      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+      const lives = parseInt(document.getElementById("lives")!.innerText);
+      document.getElementById("lives")!.innerText = String(lives-1);
       resetGame();
     })
 
@@ -385,7 +376,6 @@ function asteroids() {
       boss.attr("visibility", "visible")
       $("#bossHP").removeAttr("hidden")
     })
-    .takeUntil(endGame)
     .filter(() => document.getElementById("boss")! != null)
     .subscribe(() => {
       const bossX = parseInt(boss.attr("cx")),
@@ -402,7 +392,7 @@ function asteroids() {
     .filter(() => distanceEllipse(transformMatrix(g).m41, transformMatrix(g).m42, boss) <= 1)
     .subscribe(() => {
       const lives = parseInt(document.getElementById("lives")!.innerText)
-      document.getElementById("lives")!.innerText = lives>0? String(lives-1) : String(0)
+      document.getElementById("lives")!.innerText = String(lives-1)
       boss.attr("cx", 300).attr("cy", 40)
       resetGame();
     })
@@ -419,7 +409,7 @@ function asteroids() {
   // The main purpose of this bomb is to kill or hurt the boss, the boss has protection shield, so bullets don't work on the boss. 
   // This bomb has a lifespan of 10 seconds and will self-check its surrounding every 100 milliseconds with a limit of 10 seconds to determine if boss is nearby and if it is, it will explode and hurt the boss's health by 1. 
   // After 10 seconds, if no explosion happens, the bomb disappears into space. 
-  ship.filter(({key}) => key.code == "KeyB")
+  ship.filter(({key}) => key.keyCode == 66)
     .map(({x, y}) => {
       const bomb = new Elem(svg, "circle")
         .attr("cx", x)
@@ -444,14 +434,8 @@ function asteroids() {
     })
 }
 
-
-
 // the following simply runs your asteroids function on window load.  Make sure to leave it in place.
 if (typeof window != 'undefined')
   window.onload = ()=>{
     asteroids();
   }
-
- 
-
- 

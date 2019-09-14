@@ -4,13 +4,15 @@ const degToRad = (deg) => deg * Math.PI / 180;
 const transformMatrix = (e) => new WebKitCSSMatrix(window.getComputedStyle(e.elem).webkitTransform);
 const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const distanceBetweenPoints = (x1, y1, x2, y2) => Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-const distanceEllipse = (x, y, ellipse) => {
-    return (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
-        (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2));
-};
+const distanceEllipse = (x, y, ellipse) => (Math.pow(x - parseInt(ellipse.attr("cx")), 2) / Math.pow(parseInt(ellipse.attr("rx")), 2)) +
+    (Math.pow(y - parseInt(ellipse.attr("cy")), 2) / Math.pow(parseInt(ellipse.attr("ry")), 2));
 const getMovement = (x, y, value, angle) => ({ x: x + value * Math.sin(degToRad(angle)), y: y - value * Math.cos(degToRad(angle)) });
 const getWrapValue = (x, y, offset, svg) => ({ x: x < -offset ? svg.clientWidth + offset : x > svg.clientWidth + offset ? -offset : x,
     y: y < -offset ? svg.clientHeight + offset : y > svg.clientHeight + offset ? -offset : y });
+const getRandomPosition = () => {
+    const y = getRandomInt(1, 599), x = (y > 150 && y < 450) ? getRandomInt(0, 1) == 1 ? getRandomInt(1, 150) : getRandomInt(450, 599) : getRandomInt(1, 599);
+    return { x, y };
+};
 function getRotationDegrees(obj) {
     const matrix = obj.css("-webkit-transform") ||
         obj.css("-moz-transform") ||
@@ -20,21 +22,6 @@ function getRotationDegrees(obj) {
     const values = matrix.split('(')[1].split(')')[0].split(','), a = Number(values[0]), b = Number(values[1]);
     const angle = Math.round(Math.atan2(b, a) * (180 / Math.PI));
     return angle;
-}
-function getRandomPosition() {
-    let y = getRandomInt(1, 599), x;
-    if (y > 150 && y < 450) {
-        if (getRandomInt(0, 1)) {
-            x = getRandomInt(1, 150);
-        }
-        else {
-            x = getRandomInt(450, 599);
-        }
-    }
-    else {
-        x = getRandomInt(1, 599);
-    }
-    return { x, y };
 }
 const collisionDetection = (bullet, asteriodsBelt, asteriodsGroup, svg) => {
     asteriodsBelt
@@ -100,7 +87,7 @@ function asteroids() {
         .attr("cx", 300).attr("cy", 40)
         .attr("rx", 80).attr("ry", 40)
         .attr("fill", "gray").attr("visibility", "hidden")
-        .attr("id", "boss").attr("health", 30), endGame = Observable.interval(10)
+        .attr("id", "boss").attr("health", 10), endGame = Observable.interval(10)
         .filter(() => document.getElementById("lives").innerText == "0")
         .map(() => {
         document.getElementById("gameover").setAttribute("visibility", "visible");
@@ -117,7 +104,7 @@ function asteroids() {
         x: transformMatrix(g).m41,
         y: transformMatrix(g).m42,
         angle: getRotationDegrees($("#canvas #rocket"))
-    })), constructBullets = ship.filter(({ key }) => key.code == "Space")
+    })), constructBullets = ship.filter(({ key }) => key.keyCode == 32)
         .map(({ x, y, angle }) => {
         const coordinate = getMovement(x, y, 20, angle), bullet = new Elem(svg, "circle")
             .attr("cx", coordinate.x)
@@ -137,13 +124,13 @@ function asteroids() {
             .attr("stroke", "orange");
         asteriodsBelt.push([asteriod, getRandomInt(0, 359)]);
     }), speedController = controller();
-    ship.filter(({ key }) => key.code == "ArrowLeft")
+    ship.filter(({ key }) => key.keyCode == 37)
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle - 10) % 360) + ")"); });
-    ship.filter(({ key }) => key.code == "ArrowRight")
+    ship.filter(({ key }) => key.keyCode == 39)
         .subscribe(({ x, y, angle }) => { g.attr("transform", "translate(" + x + " " + y + ") rotate(" + ((angle + 10) % 360) + ")"); });
-    keyDown.filter(({ code }) => code == "ArrowUp")
+    ship.filter(({ key }) => key.keyCode == 38)
         .subscribe(() => speedController.accelerate());
-    keyDown.filter(({ code }) => code == "ArrowDown")
+    ship.filter(({ key }) => key.keyCode == 40)
         .subscribe(() => speedController.deccelerate());
     movementController.subscribe(({ x, y, angle }) => {
         const movement = getMovement(x, y, speedController.getSpeed(), angle), coordinate = getWrapValue(movement.x, movement.y, 0, svg);
@@ -161,10 +148,10 @@ function asteroids() {
         collisionDetection(bullet, asteriodsBelt, asteriodsGroup, svg);
         parseInt(bullet.attr("collided")) == 1 ? svg.removeChild(bullet.elem) : null;
     });
-    gameController.map(() => {
-        const score = parseInt(document.getElementById("score").innerText), level = parseInt(document.getElementById("level").innerText);
-        return { score, level };
-    })
+    gameController.map(() => ({
+        score: parseInt(document.getElementById("score").innerText),
+        level: parseInt(document.getElementById("level").innerText)
+    }))
         .filter(({ score, level }) => score >= level * 1000)
         .subscribe(({ level }) => document.getElementById("level").innerText = String(level + 1));
     gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
@@ -175,11 +162,11 @@ function asteroids() {
     gameController.flatMap(() => Observable.fromArray(asteriodsBelt))
         .filter(asteriodData => {
         const asteriodX = parseInt(asteriodData[0].attr("cx")), asteriodY = parseInt(asteriodData[0].attr("cy")), radius = parseInt(asteriodData[0].attr("r")), x = transformMatrix(g).m41, y = transformMatrix(g).m42;
-        return distanceBetweenPoints(x, y, asteriodX, asteriodY) < radius;
+        return distanceBetweenPoints(x, y, asteriodX, asteriodY) <= radius;
     })
         .subscribe(() => {
         const lives = parseInt(document.getElementById("lives").innerText);
-        document.getElementById("lives").innerText = lives > 0 ? String(lives - 1) : String(0);
+        document.getElementById("lives").innerText = String(lives - 1);
         resetGame();
     });
     gameController.filter(() => parseInt(document.getElementById("level").innerText) >= 3)
@@ -187,7 +174,6 @@ function asteroids() {
         boss.attr("visibility", "visible");
         $("#bossHP").removeAttr("hidden");
     })
-        .takeUntil(endGame)
         .filter(() => document.getElementById("boss") != null)
         .subscribe(() => {
         const bossX = parseInt(boss.attr("cx")), bossY = parseInt(boss.attr("cy")), x = transformMatrix(g).m41, y = transformMatrix(g).m42, angle = (450 + radToDeg(Math.atan2(y - bossY, x - bossX))) % 360, point = getMovement(bossX, bossY, 2, angle);
@@ -197,7 +183,7 @@ function asteroids() {
         .filter(() => distanceEllipse(transformMatrix(g).m41, transformMatrix(g).m42, boss) <= 1)
         .subscribe(() => {
         const lives = parseInt(document.getElementById("lives").innerText);
-        document.getElementById("lives").innerText = lives > 0 ? String(lives - 1) : String(0);
+        document.getElementById("lives").innerText = String(lives - 1);
         boss.attr("cx", 300).attr("cy", 40);
         resetGame();
     });
@@ -207,7 +193,7 @@ function asteroids() {
         svg.removeChild(boss.elem);
         $("#destroyed").removeAttr("hidden");
     });
-    ship.filter(({ key }) => key.code == "KeyB")
+    ship.filter(({ key }) => key.keyCode == 66)
         .map(({ x, y }) => {
         const bomb = new Elem(svg, "circle")
             .attr("cx", x)
